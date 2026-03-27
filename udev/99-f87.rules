@@ -1,3 +1,9 @@
 # Aula F87 Pro keyboard — allow non-root USB access
-SUBSYSTEM=="usb", ATTR{idVendor}=="258a", ATTR{idProduct}=="0049", MODE="0666", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0666", TAG+="uaccess"
+
+# Wired mode (VID=258A, PID=010C)
+SUBSYSTEM=="usb", ATTR{idVendor}=="258a", ATTR{idProduct}=="010c", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="010c", MODE="0666", TAG+="uaccess"
+
+# Wireless 2.4G dongle (VID=3554, PID=FA09)
+SUBSYSTEM=="usb", ATTR{idVendor}=="3554", ATTR{idProduct}=="fa09", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="fa09", MODE="0666", TAG+="uaccess"

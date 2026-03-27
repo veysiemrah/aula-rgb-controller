@@ -6,9 +6,13 @@
 #include "f87/effects.h"
 #include <stdint.h>
 
-/* USB identifiers — placeholders, to be filled from reverse engineering */
-#define F87_VENDOR_ID    0x258A
-#define F87_PRODUCT_ID   0x0049
+/* USB identifiers (confirmed via RE) */
+#define F87_VENDOR_ID           0x258A
+#define F87_PRODUCT_ID          0x010C
+
+/* Wireless 2.4G dongle identifiers */
+#define F87_VENDOR_ID_WIRELESS  0x3554
+#define F87_PRODUCT_ID_WIRELESS 0xFA09
 
 #define F87_IFACE_NUM    1
 #define F87_EP_OUT       0x02
@@ -57,8 +61,11 @@ int  f87_pkt_build_per_key_batch(f87_packet *pkt, const f87_color *colors,
 int  f87_pkt_send(f87_device *dev, const f87_packet *pkt);
 int  f87_pkt_recv(f87_device *dev, f87_packet *pkt, int timeout_ms);
 
-/* Key layout data (87-key TKL) */
-#define F87_KEY_COUNT 87
+/* Key layout data (88-key TKL, includes ISO key K88) */
+#define F87_KEY_COUNT 88
 extern const f87_key_info f87_key_layout[F87_KEY_COUNT];
+
+/* LED index mapping: key_id -> hardware LED address (from KB.ini RE) */
+extern const uint8_t f87_led_index[F87_KEY_COUNT];
 
 #endif /* F87_PROTOCOL_H */
