@@ -8,6 +8,7 @@ add_executable(f87ctl
 target_include_directories(f87ctl
     PRIVATE
         ${JSON_C_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../lib/src   # protocol.h for raw send/listen
 )
 
 target_link_libraries(f87ctl
