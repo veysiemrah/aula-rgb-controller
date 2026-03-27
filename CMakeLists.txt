@@ -8,6 +8,11 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+enable_testing()
+add_executable(test_device tests/test_device.c)
+target_link_libraries(test_device PRIVATE f87)
+add_test(NAME device_tests COMMAND test_device)
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 
