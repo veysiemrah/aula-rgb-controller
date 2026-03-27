@@ -1,0 +1,3 @@
+# Aula F87 Pro keyboard — allow non-root USB access
+SUBSYSTEM=="usb", ATTR{idVendor}=="258a", ATTR{idProduct}=="0049", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0666", TAG+="uaccess"
