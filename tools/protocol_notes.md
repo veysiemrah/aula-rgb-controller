@@ -1,4 +1,4 @@
-# Aula F87 Pro — Protocol Notes
+# Aula F87 Pro -- Protocol Notes
 
 ## USB Identifiers (Confirmed)
 
@@ -18,7 +18,81 @@ Device name from USB BusReportedDeviceDesc: "Gaming Keyboard"
 
 Interface 1 (`F87_IFACE_NUM = 1`) is used for lighting control.
 
-## Configuration
+## Communication Protocol (OpenRGB Findings)
+
+**CRITICAL: The keyboard uses HID Feature Reports, NOT interrupt transfers.**
+
+All communication uses USB control transfers with HID SET_REPORT / GET_REPORT:
+
+### SET_REPORT (host -> device)
+```
+bmRequestType: 0x21  (host-to-device, class, interface)
+bRequest:      0x09  (SET_REPORT)
+wValue:        0x0306 (feature report type 0x03 | report ID 0x06)
+wIndex:        1     (interface number)
+data:          520 bytes
+```
+
+### GET_REPORT (device -> host)
+```
+bmRequestType: 0xA1  (device-to-host, class, interface)
+bRequest:      0x01  (GET_REPORT)
+wValue:        0x0306 (feature report type 0x03 | report ID 0x06)
+wIndex:        1     (interface number)
+data:          520 bytes
+```
+
+### Report Format
+- All reports are 520 bytes
+- Byte 0 = Report ID (always 0x06)
+- Byte 1 = Command byte
+
+## Model Detection / Query
+
+Send feature report:
+```
+Byte 0: 0x06  (report ID)
+Byte 1: 0x82  (command: query model)
+Byte 2: 0x01
+Byte 3: 0x00
+Byte 4: 0x01
+Byte 5: 0x00
+Byte 6: 0x06
+Bytes 7-519: 0x00
+```
+
+Read feature report (GET_REPORT), 520 bytes response.
+Byte 13 of response = model ID:
+- 0x0B = Aula F87 Pro
+
+## Direct Per-Key RGB (Command 0x08)
+
+This is the main lighting control command. Sends RGB data for all LEDs
+in a single 520-byte feature report.
+
+```
+Byte 0x00: 0x06  (report ID)
+Byte 0x01: 0x08  (command: set LEDs direct)
+Byte 0x02: 0x00
+Byte 0x03: 0x00
+Byte 0x04: 0x01
+Byte 0x05: 0x00
+Byte 0x06: 0x7A  (122 decimal - LED count for buffer)
+Byte 0x07: 0x01
+Bytes 0x08+: RGB data, 3 bytes per LED (R, G, B)
+             LED index * 3 + 0x08 = offset for that LED's red byte
+```
+
+Maximum LED index that fits: (520 - 8) / 3 = 170 LEDs
+Actual keyboard uses indices up to ~101 (87 keys, non-sequential addressing).
+
+## Keepalive
+
+The keyboard reverts to its stored hardware effect after approximately
+1 second without receiving a direct LED update. Applications using direct
+mode must send updates at least every 500ms to maintain control.
+
+## Configuration (from KB.ini)
 
 - **ChannelMask**: 3 (binary 11 = supports both wired and wireless)
 - **Firmware version**: 24
@@ -26,19 +100,11 @@ Interface 1 (`F87_IFACE_NUM = 1`) is used for lighting control.
 - **ShowDebounce**: 0x04000101
 - **Psd**: 3,0,0,0,3,66 (password/protection config)
 
-## Packet Structure
-
-Packet size: 64 bytes (confirmed)
-
-```
-Byte 0: Report ID / Command
-Byte 1: Sub-command
-Byte 2-63: Payload
-```
-
-## LED Effects
+## LED Effects (Hardware, stored in keyboard flash)
 
 19 effects total. Extracted from KB.ini LedOpt entries.
+**Note: the command to select hardware effects is NOT yet known.**
+Only direct per-key RGB (command 0x08) is implemented.
 
 Format: `LedOpt<n> = ui_index, hw_id, has_speed, has_brightness, has_direction, has_random, has_color`
 
@@ -172,6 +238,7 @@ the internal LED driver addressing. The mapping was extracted from KB.ini K entr
 
 ## Capture Log
 
-| Date       | File | Action          | Notes                                      |
-|------------|------|-----------------|--------------------------------------------|
-| 2026-03-27 | —    | KB.ini analysis | Extracted VID/PID, LED map, effects from RE |
+| Date       | File | Action                | Notes                                      |
+|------------|------|-----------------------|--------------------------------------------|
+| 2026-03-27 | --   | KB.ini analysis       | Extracted VID/PID, LED map, effects from RE |
+| 2026-03-27 | --   | OpenRGB RE findings   | HID feature reports, 520-byte packets, model query, direct LED command |

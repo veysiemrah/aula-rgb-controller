@@ -10,8 +10,20 @@ int f87_set_brightness(f87_device *dev, uint8_t level)
     if (level > 100)
         level = 100;
 
+    /*
+     * In direct mode there is no separate brightness command.
+     * Scale all key colors by the brightness level and send a full
+     * LED update.  This is a simple software-side brightness control.
+     */
+    f87_color scaled[F87_KEY_COUNT];
+    for (int i = 0; i < dev->num_keys; i++) {
+        scaled[i].r = (uint8_t)((dev->key_colors[i].r * level) / 100);
+        scaled[i].g = (uint8_t)((dev->key_colors[i].g * level) / 100);
+        scaled[i].b = (uint8_t)((dev->key_colors[i].b * level) / 100);
+    }
+
     f87_packet pkt;
-    f87_pkt_build_brightness(&pkt, level);
+    f87_pkt_build_direct_leds(&pkt, scaled, f87_led_index, dev->num_keys);
     int rc = f87_pkt_send(dev, &pkt);
     return (rc < 0) ? rc : 0;
 }
@@ -20,13 +32,23 @@ int f87_get_brightness(f87_device *dev, uint8_t *level)
 {
     (void)dev;
     (void)level;
-    /* TODO: query brightness from device */
+    /* TODO: no known query for current brightness in direct mode */
     return -1;
 }
 
 int f87_lights_off(f87_device *dev)
 {
-    return f87_set_brightness(dev, 0);
+    if (!dev)
+        return -1;
+
+    /* Send an all-black LED frame */
+    f87_color off[F87_KEY_COUNT];
+    memset(off, 0, sizeof(off));
+
+    f87_packet pkt;
+    f87_pkt_build_direct_leds(&pkt, off, f87_led_index, F87_KEY_COUNT);
+    int rc = f87_pkt_send(dev, &pkt);
+    return (rc < 0) ? rc : 0;
 }
 
 int f87_set_key_color(f87_device *dev, uint8_t key_id, f87_color color)
@@ -67,47 +89,42 @@ int f87_set_key_map(f87_device *dev, const f87_color *colors, int count)
     return 0;
 }
 
+/*
+ * Apply all pending key color changes by sending a single 520-byte
+ * direct-mode LED feature report.
+ *
+ * Unlike the old 64-byte protocol that required multiple batched packets,
+ * the 520-byte report contains RGB data for ALL LEDs in one transfer.
+ * The hardware LED index mapping (f87_led_index[]) maps each key_id to
+ * its position in the LED data buffer.
+ */
 int f87_apply(f87_device *dev)
 {
     if (!dev)
         return -1;
 
-    /* Send dirty keys in batches */
-    int offset = 0;
-    while (offset < dev->num_keys) {
-        /* Check if any keys in this range are dirty */
-        int has_dirty = 0;
-        for (int i = offset; i < dev->num_keys && i < offset + 20; i++) {
-            if (dev->key_dirty[i]) {
-                has_dirty = 1;
-                break;
-            }
+    /* Check if anything is dirty */
+    int has_dirty = 0;
+    for (int i = 0; i < dev->num_keys; i++) {
+        if (dev->key_dirty[i]) {
+            has_dirty = 1;
+            break;
         }
-
-        if (has_dirty) {
-            f87_packet pkt;
-            int remaining = dev->num_keys - offset;
-            int batch_count = remaining > 20 ? 20 : remaining;
-
-            int packed = f87_pkt_build_per_key_batch(
-                &pkt, dev->key_colors, dev->key_dirty, offset, batch_count);
-
-            if (packed > 0) {
-                int rc = f87_pkt_send(dev, &pkt);
-                if (rc < 0)
-                    return rc;
-
-                /* Clear dirty flags for keys we successfully sent */
-                for (int i = offset; i < offset + batch_count; i++) {
-                    if (i < dev->num_keys)
-                        dev->key_dirty[i] = 0;
-                }
-            }
-        }
-
-        offset += 20;
     }
+    if (!has_dirty)
+        return 0;
 
+    /* Build a single feature report with all key colors */
+    f87_packet pkt;
+    f87_pkt_build_direct_leds(&pkt, dev->key_colors, f87_led_index,
+                               dev->num_keys);
+
+    int rc = f87_pkt_send(dev, &pkt);
+    if (rc < 0)
+        return rc;
+
+    /* Clear all dirty flags */
+    memset(dev->key_dirty, 0, sizeof(dev->key_dirty));
     return 0;
 }
 

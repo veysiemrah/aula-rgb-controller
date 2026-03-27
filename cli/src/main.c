@@ -1,5 +1,5 @@
 /*
- * f87ctl — CLI for controlling Womier/Gamakay K87 (F87) keyboards
+ * f87ctl -- CLI for controlling Aula F87 Pro keyboards
  *
  * Uses the public libf87 API for device management, lighting, and effects.
  * Includes the internal protocol header only for raw HID packet commands.
@@ -7,7 +7,7 @@
 
 #include <f87/f87.h>
 
-/* Internal header — needed only for raw send/listen (f87_pkt_send/recv) */
+/* Internal header -- needed only for raw send/listen (f87_pkt_send/recv) */
 #include "protocol.h"
 
 #include <stdio.h>
@@ -32,18 +32,13 @@ static void usage(const char *progname)
         "Commands:\n"
         "  list                              List connected devices\n"
         "  info                              Device information\n"
-        "  brightness <0-100>                Set brightness\n"
+        "  brightness <0-100>                Set brightness (scales all keys)\n"
         "  off                               Turn off lighting\n"
-        "  effect <name> [options]            Set effect\n"
-        "      --speed N                     Speed 0-10\n"
-        "      --color RRGGBB                Primary colour\n"
-        "      --direction left|right|up|down\n"
+        "  color <RRGGBB>                    Set all keys to colour\n"
         "  key set <KEY> <RRGGBB>            Set single key colour\n"
         "  key set-all <RRGGBB>              Set all keys to colour\n"
-        "  raw send \"XX XX XX ...\"            Send raw HID packet\n"
-        "  raw listen                        Listen for HID packets\n"
-        "\n"
-        "Effect names: static, breathing, wave, rainbow, ripple, reactive\n"
+        "  raw send \"XX XX XX ...\"            Send raw HID feature report\n"
+        "  raw listen                        Read HID feature report\n"
         "\n", progname);
 }
 
@@ -74,7 +69,6 @@ static int parse_color(const char *str, f87_color *out)
 /**
  * Open the first available F87 device.
  * Caller must call f87_close() on the returned device.
- * *out_info is set to the matching device_info entry (valid until list is freed).
  * Returns NULL on failure (prints error to stderr).
  */
 static f87_device *open_first_device(f87_ctx *ctx,
@@ -129,7 +123,7 @@ static int cmd_list(f87_ctx *ctx)
 
     printf("Found %d device(s):\n\n", count);
     for (int i = 0; i < count; i++) {
-        printf("  [%d] %s — %s\n"
+        printf("  [%d] %s -- %s\n"
                "      Bus %d, Address %d\n"
                "      VID:PID %04X:%04X\n\n",
                i,
@@ -170,6 +164,7 @@ static int cmd_info(f87_ctx *ctx)
     printf("  VID:PID:      %04X:%04X\n", info->vendor_id, info->product_id);
     printf("  Bus:          %d\n", info->bus);
     printf("  Address:      %d\n", info->address);
+    printf("  Protocol:     HID Feature Reports (%d bytes)\n", F87_REPORT_SIZE);
 
     f87_close(dev);
     f87_free_device_list(list);
@@ -231,122 +226,37 @@ static int cmd_off(f87_ctx *ctx)
     return 0;
 }
 
-/**
- * Parse a direction string to f87_direction.
- * Returns 0 on success, -1 on failure.
- */
-static int parse_direction(const char *str, f87_direction *out)
-{
-    if (strcasecmp(str, "right") == 0) { *out = F87_DIR_RIGHT; return 0; }
-    if (strcasecmp(str, "left") == 0)  { *out = F87_DIR_LEFT;  return 0; }
-    if (strcasecmp(str, "up") == 0)    { *out = F87_DIR_UP;    return 0; }
-    if (strcasecmp(str, "down") == 0)  { *out = F87_DIR_DOWN;  return 0; }
-    return -1;
-}
-
-static int cmd_effect(f87_ctx *ctx, int argc, char **argv)
+static int cmd_color(f87_ctx *ctx, int argc, char **argv)
 {
     if (argc < 1) {
-        fprintf(stderr, "Usage: f87ctl effect <name> [--speed N] "
-                        "[--color RRGGBB] [--direction left|right|up|down]\n");
+        fprintf(stderr, "Usage: f87ctl color <RRGGBB>\n");
         return 1;
     }
 
-    const char *name = argv[0];
-
-    /* Match effect name (case-insensitive) using f87_effect_name() */
-    f87_effect_type matched = F87_EFFECT_COUNT;
-    for (int i = 0; i < (int)F87_EFFECT_COUNT; i++) {
-        const char *ename = f87_effect_name((f87_effect_type)i);
-        if (ename && strcasecmp(ename, name) == 0) {
-            matched = (f87_effect_type)i;
-            break;
-        }
-    }
-
-    if (matched == F87_EFFECT_COUNT) {
-        fprintf(stderr, "Unknown effect '%s'.\nAvailable effects: ", name);
-        for (int i = 0; i < (int)F87_EFFECT_COUNT; i++) {
-            const char *ename = f87_effect_name((f87_effect_type)i);
-            fprintf(stderr, "%s%s", ename ? ename : "?",
-                    i < (int)F87_EFFECT_COUNT - 1 ? ", " : "\n");
-        }
+    f87_color color;
+    if (parse_color(argv[0], &color) < 0) {
+        fprintf(stderr, "Invalid colour '%s'. Expected RRGGBB.\n", argv[0]);
         return 1;
     }
 
-    /* Defaults */
-    f87_effect effect = {
-        .type       = matched,
-        .speed      = 5,
-        .brightness = 100,
-        .color1     = F87_COLOR_WHITE,
-        .color2     = F87_COLOR_OFF,
-        .direction  = F87_DIR_RIGHT,
-    };
-
-    /* Parse optional arguments */
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--speed") == 0) {
-            if (++i >= argc) {
-                fprintf(stderr, "--speed requires a value (0-10).\n");
-                return 1;
-            }
-            int speed = atoi(argv[i]);
-            if (speed < 0 || speed > 10) {
-                fprintf(stderr, "Speed must be 0-10, got %d.\n", speed);
-                return 1;
-            }
-            effect.speed = (uint8_t)speed;
-        } else if (strcmp(argv[i], "--color") == 0) {
-            if (++i >= argc) {
-                fprintf(stderr, "--color requires a value (RRGGBB).\n");
-                return 1;
-            }
-            if (parse_color(argv[i], &effect.color1) < 0) {
-                fprintf(stderr, "Invalid colour '%s'. Expected RRGGBB.\n",
-                        argv[i]);
-                return 1;
-            }
-        } else if (strcmp(argv[i], "--direction") == 0) {
-            if (++i >= argc) {
-                fprintf(stderr,
-                    "--direction requires a value (left|right|up|down).\n");
-                return 1;
-            }
-            if (parse_direction(argv[i], &effect.direction) < 0) {
-                fprintf(stderr,
-                    "Invalid direction '%s'. "
-                    "Expected left, right, up, or down.\n", argv[i]);
-                return 1;
-            }
-        } else {
-            fprintf(stderr, "Unknown option '%s'.\n", argv[i]);
-            return 1;
-        }
-    }
-
-    f87_device_info *dlist = NULL;
-    int dcount = 0;
-    f87_device *dev = open_first_device(ctx, &dlist, &dcount);
+    f87_device_info *list = NULL;
+    int count = 0;
+    f87_device *dev = open_first_device(ctx, &list, &count);
     if (!dev)
         return 1;
 
-    int rc = f87_set_effect(dev, &effect);
+    f87_set_all_keys(dev, color);
+    int rc = f87_apply(dev);
     if (rc < 0) {
-        fprintf(stderr, "Error setting effect: %s\n", f87_strerror(rc));
+        fprintf(stderr, "Error applying colour: %s\n", f87_strerror(rc));
         f87_close(dev);
-        f87_free_device_list(dlist);
+        f87_free_device_list(list);
         return 1;
     }
 
-    printf("Effect '%s' set (speed=%d, direction=%s).\n",
-           f87_effect_name(matched), effect.speed,
-           effect.direction == F87_DIR_LEFT  ? "left"  :
-           effect.direction == F87_DIR_RIGHT ? "right" :
-           effect.direction == F87_DIR_UP    ? "up"    : "down");
-
+    printf("All keys set to #%02X%02X%02X.\n", color.r, color.g, color.b);
     f87_close(dev);
-    f87_free_device_list(dlist);
+    f87_free_device_list(list);
     return 0;
 }
 
@@ -477,14 +387,30 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
 
 /**
  * Print a hex dump of a packet buffer.
+ * Only prints up to the first `len` bytes, but shows trailing
+ * non-zero bytes if any.
  */
 static void print_hex_dump(const uint8_t *data, int len)
 {
+    /* Find last non-zero byte to avoid dumping 500+ zeros */
+    int last_nonzero = 0;
     for (int i = 0; i < len; i++) {
+        if (data[i] != 0)
+            last_nonzero = i;
+    }
+    int print_len = last_nonzero + 1;
+    if (print_len < 16)
+        print_len = 16; /* always show at least 16 bytes */
+    if (print_len > len)
+        print_len = len;
+
+    for (int i = 0; i < print_len; i++) {
         printf("%02X", data[i]);
-        if (i < len - 1)
+        if (i < print_len - 1)
             printf(" ");
     }
+    if (print_len < len)
+        printf(" ... (%d more zero bytes)", len - print_len);
     printf("\n");
 }
 
@@ -495,8 +421,8 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
         return 1;
     }
 
-    /* Join all remaining args into one string (handles both quoted and unquoted) */
-    char buf[512] = {0};
+    /* Join all remaining args into one string */
+    char buf[2048] = {0};
     for (int i = 0; i < argc; i++) {
         if (i > 0)
             strncat(buf, " ", sizeof(buf) - strlen(buf) - 1);
@@ -509,7 +435,7 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
 
     int byte_count = 0;
     char *tok = strtok(buf, " ");
-    while (tok && byte_count < F87_PKT_SIZE) {
+    while (tok && byte_count < F87_REPORT_SIZE) {
         unsigned int val;
         if (sscanf(tok, "%x", &val) != 1 || val > 0xFF) {
             fprintf(stderr, "Invalid hex byte '%s'.\n", tok);
@@ -524,8 +450,9 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
         return 1;
     }
 
-    printf("Sending %d byte(s):\n  ", byte_count);
-    print_hex_dump(pkt.data, F87_PKT_SIZE);
+    printf("Sending %d byte(s) as %d-byte feature report:\n  ",
+           byte_count, F87_REPORT_SIZE);
+    print_hex_dump(pkt.data, F87_REPORT_SIZE);
 
     f87_device_info *list = NULL;
     int count = 0;
@@ -540,17 +467,16 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
         f87_free_device_list(list);
         return 1;
     }
-    printf("Sent.\n");
+    printf("Sent (%d bytes transferred).\n", rc);
 
     /* Try to read a response */
     f87_packet resp;
-    f87_pkt_init(&resp);
     rc = f87_pkt_recv(dev, &resp, F87_TIMEOUT_MS);
     if (rc < 0) {
         printf("No response (timeout or error).\n");
     } else {
-        printf("Response:\n  ");
-        print_hex_dump(resp.data, F87_PKT_SIZE);
+        printf("Response (%d bytes):\n  ", rc);
+        print_hex_dump(resp.data, F87_REPORT_SIZE);
     }
 
     f87_close(dev);
@@ -566,32 +492,24 @@ static int cmd_raw_listen(f87_ctx *ctx)
     if (!dev)
         return 1;
 
-    printf("Listening for HID packets (Ctrl+C to stop)...\n\n");
+    printf("Reading HID feature report...\n\n");
 
-    int pkt_num = 0;
-    for (;;) {
-        f87_packet pkt;
-        f87_pkt_init(&pkt);
-
-        int rc = f87_pkt_recv(dev, &pkt, 5000);
-        if (rc < 0) {
-            /* Timeout — just keep listening */
-            continue;
-        }
-
-        printf("[%04d] ", ++pkt_num);
-        print_hex_dump(pkt.data, F87_PKT_SIZE);
-        fflush(stdout);
+    f87_packet pkt;
+    int rc = f87_pkt_recv(dev, &pkt, 5000);
+    if (rc < 0) {
+        printf("No response (timeout or error).\n");
+    } else {
+        printf("Response (%d bytes):\n  ", rc);
+        print_hex_dump(pkt.data, F87_REPORT_SIZE);
     }
 
-    /* Unreachable, but good practice */
     f87_close(dev);
     f87_free_device_list(list);
     return 0;
 }
 
 /* ---------------------------------------------------------------------------
- * Main — argument dispatch
+ * Main -- argument dispatch
  * ---------------------------------------------------------------------------*/
 
 int main(int argc, char **argv)
@@ -633,8 +551,8 @@ int main(int argc, char **argv)
     } else if (strcmp(cmd, "off") == 0) {
         ret = cmd_off(ctx);
 
-    } else if (strcmp(cmd, "effect") == 0) {
-        ret = cmd_effect(ctx, argc - 2, argv + 2);
+    } else if (strcmp(cmd, "color") == 0 || strcmp(cmd, "colour") == 0) {
+        ret = cmd_color(ctx, argc - 2, argv + 2);
 
     } else if (strcmp(cmd, "key") == 0) {
         ret = cmd_key(ctx, argc - 2, argv + 2);

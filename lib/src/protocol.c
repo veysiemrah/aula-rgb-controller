@@ -8,134 +8,123 @@ void f87_pkt_init(f87_packet *pkt)
         memset(pkt, 0, sizeof(f87_packet));
 }
 
-int f87_pkt_build_brightness(f87_packet *pkt, uint8_t level)
+/*
+ * Build a model-query feature report.
+ * Send: {0x06, 0x82, 0x01, 0x00, 0x01, 0x00, 0x06} padded to 520 bytes.
+ * Response byte 13 contains the model ID (0x0B = F87 Pro).
+ */
+void f87_pkt_build_query_model(f87_packet *pkt)
 {
-    if (!pkt)
-        return -1;
-
     f87_pkt_init(pkt);
-    pkt->data[0] = F87_CMD_BRIGHTNESS;
-    pkt->data[1] = level;
-    return 0;
+    pkt->data[0] = F87_REPORT_ID;       /* 0x06 */
+    pkt->data[1] = F87_CMD_QUERY_MODEL; /* 0x82 */
+    pkt->data[2] = 0x01;
+    pkt->data[3] = 0x00;
+    pkt->data[4] = 0x01;
+    pkt->data[5] = 0x00;
+    pkt->data[6] = 0x06;
 }
 
-int f87_pkt_build_effect(f87_packet *pkt, const f87_effect *effect)
+/*
+ * Build a direct per-key LED update feature report.
+ *
+ * Layout (520 bytes):
+ *   Byte 0x00: 0x06  (report ID)
+ *   Byte 0x01: 0x08  (command: set LEDs direct)
+ *   Byte 0x04: 0x01
+ *   Byte 0x06: 0x7A  (122 — LED count for buffer)
+ *   Byte 0x07: 0x01
+ *   Bytes 0x08+: RGB data, 3 bytes per LED
+ *                led_index * 3 + 0x08 = offset for that LED's red byte
+ *
+ * Parameters:
+ *   colors      — array of f87_color, one per key
+ *   led_indices — hardware LED index for each key (from f87_led_index[])
+ *   num_keys    — number of entries in colors/led_indices
+ */
+void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
+                                const uint8_t *led_indices, int num_keys)
 {
-    if (!pkt || !effect)
-        return -1;
-
     f87_pkt_init(pkt);
-    pkt->data[0]  = F87_CMD_EFFECT;
-    pkt->data[1]  = (uint8_t)effect->type;
-    pkt->data[2]  = effect->speed;
-    pkt->data[3]  = effect->brightness;
-    pkt->data[4]  = effect->color1.r;
-    pkt->data[5]  = effect->color1.g;
-    pkt->data[6]  = effect->color1.b;
-    pkt->data[7]  = effect->color2.r;
-    pkt->data[8]  = effect->color2.g;
-    pkt->data[9]  = effect->color2.b;
-    pkt->data[10] = (uint8_t)effect->direction;
-    return 0;
-}
+    pkt->data[0] = F87_REPORT_ID;       /* 0x06 */
+    pkt->data[1] = F87_CMD_SET_LEDS;    /* 0x08 */
+    pkt->data[4] = 0x01;
+    pkt->data[6] = F87_LED_BUFFER_KEYS; /* 0x7A = 122 */
+    pkt->data[7] = 0x01;
 
-int f87_pkt_build_per_key(f87_packet *pkt, uint8_t key_id, f87_color color)
-{
-    if (!pkt)
-        return -1;
-
-    f87_pkt_init(pkt);
-    pkt->data[0] = F87_CMD_PER_KEY;
-    pkt->data[1] = 1;  /* single key mode */
-    pkt->data[2] = key_id;
-    pkt->data[3] = color.r;
-    pkt->data[4] = color.g;
-    pkt->data[5] = color.b;
-    return 0;
-}
-
-int f87_pkt_build_per_key_batch(f87_packet *pkt, const f87_color *colors,
-                                 const int *dirty, int offset, int count)
-{
-    if (!pkt || !colors || !dirty)
-        return -1;
-
-    f87_pkt_init(pkt);
-    pkt->data[0] = F87_CMD_PER_KEY;
-    pkt->data[1] = 0;  /* batch mode */
-
-    /* Maximum keys per packet: (64 - 3) / 4 = 15
-     * Byte 2 = number of keys packed
-     * Byte 3+ = key_id, R, G, B for each key (4 bytes per entry) */
-    int max_per_pkt = (F87_PKT_SIZE - 3) / 4;
-    if (max_per_pkt > 15)
-        max_per_pkt = 15;
-
-    int packed = 0;
-    int pos = 3; /* start writing after header */
-
-    for (int i = offset; i < offset + count && packed < max_per_pkt; i++) {
-        if (i < 0 || i >= 128)
-            break;
-        if (!dirty[i])
+    for (int i = 0; i < num_keys; i++) {
+        int offset = F87_LED_DATA_OFFSET + led_indices[i] * 3;
+        /* Guard against buffer overflow (122 LEDs * 3 = 366 + 8 = 374 < 520) */
+        if (offset + 2 >= F87_REPORT_SIZE)
             continue;
-
-        pkt->data[pos++] = (uint8_t)i;       /* key_id */
-        pkt->data[pos++] = colors[i].r;
-        pkt->data[pos++] = colors[i].g;
-        pkt->data[pos++] = colors[i].b;
-        packed++;
-
-        /* Safety: check we don't overflow the packet
-         * Each entry is 4 bytes (id + RGB), we need pos + 4 <= 64 */
-        if (pos + 4 > F87_PKT_SIZE)
-            break;
+        pkt->data[offset]     = colors[i].r;
+        pkt->data[offset + 1] = colors[i].g;
+        pkt->data[offset + 2] = colors[i].b;
     }
-
-    pkt->data[2] = (uint8_t)packed;
-    return packed;
 }
 
+/*
+ * Send a feature report to the device via USB control transfer.
+ *
+ * HID SET_REPORT:
+ *   bmRequestType = 0x21 (host-to-device, class, interface)
+ *   bRequest      = 0x09 (SET_REPORT)
+ *   wValue        = 0x0300 | report_id
+ *   wIndex        = interface number
+ */
 int f87_pkt_send(f87_device *dev, const f87_packet *pkt)
 {
     if (!dev || !pkt || !dev->usb_handle)
         return -1;
 
-    int transferred = 0;
-    int rc = libusb_interrupt_transfer(
+    int rc = libusb_control_transfer(
         (libusb_device_handle *)dev->usb_handle,
-        F87_EP_OUT,
+        F87_HID_RT_OUT,          /* 0x21 */
+        F87_HID_SET_REPORT,      /* 0x09 */
+        F87_HID_WVALUE,          /* 0x0306 */
+        F87_IFACE_NUM,           /* interface 1 */
         (unsigned char *)pkt->data,
-        F87_PKT_SIZE,
-        &transferred,
+        F87_REPORT_SIZE,
         F87_TIMEOUT_MS
     );
 
-    if (rc != 0)
+    if (rc < 0)
         return -1;
 
-    return transferred;
+    return rc;
 }
 
+/*
+ * Receive a feature report from the device via USB control transfer.
+ *
+ * HID GET_REPORT:
+ *   bmRequestType = 0xA1 (device-to-host, class, interface)
+ *   bRequest      = 0x01 (GET_REPORT)
+ *   wValue        = 0x0300 | report_id
+ *   wIndex        = interface number
+ */
 int f87_pkt_recv(f87_device *dev, f87_packet *pkt, int timeout_ms)
 {
     if (!dev || !pkt || !dev->usb_handle)
         return -1;
 
-    int transferred = 0;
-    int rc = libusb_interrupt_transfer(
+    f87_pkt_init(pkt);
+
+    int rc = libusb_control_transfer(
         (libusb_device_handle *)dev->usb_handle,
-        F87_EP_IN,
+        F87_HID_RT_IN,           /* 0xA1 */
+        F87_HID_GET_REPORT,      /* 0x01 */
+        F87_HID_WVALUE,          /* 0x0306 */
+        F87_IFACE_NUM,           /* interface 1 */
         pkt->data,
-        F87_PKT_SIZE,
-        &transferred,
+        F87_REPORT_SIZE,
         timeout_ms > 0 ? timeout_ms : F87_TIMEOUT_MS
     );
 
-    if (rc != 0)
+    if (rc < 0)
         return -1;
 
-    return transferred;
+    return rc;
 }
 
 /*

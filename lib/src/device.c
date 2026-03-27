@@ -16,7 +16,7 @@
 
 const char *f87_version_string(void)
 {
-    return "0.1.0";
+    return "0.2.0";
 }
 
 f87_ctx *f87_init(void)
@@ -141,6 +141,28 @@ void f87_free_device_list(f87_device_info *list)
     free(list);
 }
 
+/*
+ * Query the device model via HID feature report.
+ * Returns the model ID byte, or -1 on failure.
+ */
+static int query_device_model(f87_device *dev)
+{
+    f87_packet pkt;
+    f87_pkt_build_query_model(&pkt);
+
+    int rc = f87_pkt_send(dev, &pkt);
+    if (rc < 0)
+        return -1;
+
+    f87_packet resp;
+    rc = f87_pkt_recv(dev, &resp, F87_TIMEOUT_MS);
+    if (rc < 0)
+        return -1;
+
+    /* Model ID is at byte 13 of the response */
+    return (int)resp.data[13];
+}
+
 f87_device *f87_open(f87_ctx *ctx, const f87_device_info *info)
 {
     if (!ctx || !info)
@@ -176,7 +198,7 @@ f87_device *f87_open(f87_ctx *ctx, const f87_device_info *info)
         libusb_detach_kernel_driver(handle, F87_IFACE_NUM);
     }
 
-    /* Claim the interface */
+    /* Claim interface 1 (vendor-defined HID for lighting control) */
     rc = libusb_claim_interface(handle, F87_IFACE_NUM);
     if (rc != 0) {
         libusb_close(handle);
@@ -196,6 +218,16 @@ f87_device *f87_open(f87_ctx *ctx, const f87_device_info *info)
     dev->iface_claimed = 1;
     dev->num_keys = F87_KEY_COUNT;
     snprintf(dev->firmware_ver, sizeof(dev->firmware_ver), "unknown");
+
+    /*
+     * Query device model to verify this is an F87 Pro (or compatible).
+     * Non-fatal: if the query fails we still allow use — the VID/PID
+     * match is sufficient for basic operation.
+     */
+    int model = query_device_model(dev);
+    if (model >= 0) {
+        dev->model_id = (uint8_t)model;
+    }
 
     return dev;
 }
@@ -223,7 +255,16 @@ const char *f87_get_firmware_version(f87_device *dev)
 {
     if (!dev)
         return "unknown";
-    /* TODO: query firmware version from device */
+
+    /*
+     * TODO: the model query response may contain firmware version data
+     * in other byte positions. For now we report the model ID if known.
+     */
+    if (dev->model_id != 0) {
+        snprintf(dev->firmware_ver, sizeof(dev->firmware_ver),
+                 "model 0x%02X", dev->model_id);
+    }
+
     return dev->firmware_ver;
 }
 

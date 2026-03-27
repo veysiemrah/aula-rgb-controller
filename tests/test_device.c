@@ -46,12 +46,12 @@ static int test_strerror(void)
     return 0;
 }
 
-static int test_effect_names(void)
+static int test_mode_names(void)
 {
-    printf("test_effect_names... ");
-    assert(f87_effect_name(F87_EFFECT_STATIC) != NULL);
-    assert(f87_effect_name(F87_EFFECT_RAINBOW) != NULL);
-    assert(f87_effect_name(F87_EFFECT_COUNT) != NULL);
+    printf("test_mode_names... ");
+    assert(f87_mode_name(F87_MODE_OFF) != NULL);
+    assert(f87_mode_name(F87_MODE_DIRECT) != NULL);
+    assert(f87_mode_name(F87_MODE_COUNT) != NULL);
     printf("PASS\n");
     return 0;
 }
@@ -62,7 +62,7 @@ int main(void)
     test_init_exit();
     test_version();
     test_strerror();
-    test_effect_names();
+    test_mode_names();
     test_find_no_device();
     printf("=== All tests passed ===\n");
     return 0;
