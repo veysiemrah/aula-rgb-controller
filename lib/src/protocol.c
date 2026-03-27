@@ -64,12 +64,12 @@ int f87_pkt_build_per_key_batch(f87_packet *pkt, const f87_color *colors,
     pkt->data[0] = F87_CMD_PER_KEY;
     pkt->data[1] = 0;  /* batch mode */
 
-    /* Maximum keys per packet: (64 - 3) / 3 = 20
+    /* Maximum keys per packet: (64 - 3) / 4 = 15
      * Byte 2 = number of keys packed
-     * Byte 3+ = key_id, R, G, B for each key */
-    int max_per_pkt = (F87_PKT_SIZE - 3) / 3;
-    if (max_per_pkt > 20)
-        max_per_pkt = 20;
+     * Byte 3+ = key_id, R, G, B for each key (4 bytes per entry) */
+    int max_per_pkt = (F87_PKT_SIZE - 3) / 4;
+    if (max_per_pkt > 15)
+        max_per_pkt = 15;
 
     int packed = 0;
     int pos = 3; /* start writing after header */

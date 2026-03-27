@@ -56,7 +56,7 @@ int f87_get_supported_effects(f87_device *dev, f87_effect_type **list, int *coun
 
 const char *f87_effect_name(f87_effect_type type)
 {
-    if (type < 0 || type >= F87_EFFECT_COUNT)
+    if (type >= F87_EFFECT_COUNT)
         return "Unknown";
     return effect_names[type];
 }
