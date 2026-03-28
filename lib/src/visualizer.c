@@ -9,6 +9,7 @@
 
 typedef struct {
     float smooth_bands[F87_AUDIO_BANDS];
+    float peak_bands[F87_AUDIO_BANDS];  /* Auto-gain per band */
 } spectrum_viz_data_t;
 
 static int spectrum_viz_init(f87_effect_ctx_t *ctx)
@@ -27,8 +28,14 @@ static void spectrum_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     float smooth = 0.3f + (float)(4 - ctx->speed) * 0.1f;
 
     if (audio) {
-        for (int b = 0; b < F87_AUDIO_BANDS; b++)
+        for (int b = 0; b < F87_AUDIO_BANDS; b++) {
             sd->smooth_bands[b] += (audio->bands[b] - sd->smooth_bands[b]) * smooth;
+            /* Auto-gain per band */
+            if (sd->smooth_bands[b] > sd->peak_bands[b])
+                sd->peak_bands[b] = sd->smooth_bands[b];
+            sd->peak_bands[b] *= 0.999f;
+            if (sd->peak_bands[b] < 0.01f) sd->peak_bands[b] = 0.01f;
+        }
     } else {
         for (int b = 0; b < F87_AUDIO_BANDS; b++)
             sd->smooth_bands[b] *= 0.95f;
@@ -40,7 +47,9 @@ static void spectrum_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
         if (row >= F87_AUDIO_BANDS) continue;
 
         int band = F87_AUDIO_BANDS - 1 - row;
-        float level = sd->smooth_bands[band];
+        /* Normalize band level against its own peak */
+        float level = sd->smooth_bands[band] / sd->peak_bands[band];
+        if (level > 1.0f) level = 1.0f;
         float max_col = level * 22.0f;
 
         if ((float)col < max_col) {
@@ -79,6 +88,7 @@ static const f87_sw_effect_t viz_spectrum = {
 typedef struct {
     float flash;
     float hue_offset;
+    float peak_energy;    /* Auto-gain: tracks recent peak */
 } beat_viz_data_t;
 
 static int beat_viz_init(f87_effect_ctx_t *ctx)
@@ -94,32 +104,42 @@ static void beat_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
 {
     beat_viz_data_t *bd = ctx->effect_data;
     float br_scale = (float)ctx->brightness / 4.0f;
-    float decay = 0.85f - (float)ctx->speed * 0.05f;
+    float decay = 0.82f;
 
     bd->flash *= decay;
 
-    if (audio && audio->beat) {
-        bd->flash = audio->beat_intensity;
-        if (bd->flash < 0.5f) bd->flash = 0.5f;
-        bd->hue_offset += 0.15f;
+    /* Auto-gain: track peak energy, normalize against it */
+    if (audio) {
+        if (audio->energy > bd->peak_energy)
+            bd->peak_energy = audio->energy;
+        /* Slowly decay peak so it adapts to volume changes */
+        bd->peak_energy *= 0.999f;
+        if (bd->peak_energy < 0.01f) bd->peak_energy = 0.01f;
+
+        /* Normalize energy to 0-1 range based on recent peak */
+        float normalized = audio->energy / bd->peak_energy;
+        if (normalized > 1.0f) normalized = 1.0f;
+
+        if (audio->beat) {
+            bd->flash = 1.0f;
+            bd->hue_offset += 0.4f;
+        } else if (normalized > bd->flash) {
+            bd->flash = normalized;
+        }
     }
 
-    if (bd->flash < 0.01f) return;
+    if (bd->flash < 0.02f) return;
 
-    float r = (sinf(bd->hue_offset) * 0.5f + 0.5f) * (float)ctx->base_color[0] +
-              (1.0f - sinf(bd->hue_offset) * 0.5f - 0.5f) * 128.0f;
-    float g = (sinf(bd->hue_offset + 2.09f) * 0.5f + 0.5f) * (float)ctx->base_color[1] +
-              (1.0f - sinf(bd->hue_offset + 2.09f) * 0.5f - 0.5f) * 64.0f;
-    float b = (sinf(bd->hue_offset + 4.19f) * 0.5f + 0.5f) * (float)ctx->base_color[2] +
-              (1.0f - sinf(bd->hue_offset + 4.19f) * 0.5f - 0.5f) * 200.0f;
+    /* Color: rotate hue on each beat */
+    float h = bd->hue_offset;
+    float r = (sinf(h) * 0.5f + 0.5f);
+    float g = (sinf(h + 2.094f) * 0.5f + 0.5f);
+    float b = (sinf(h + 4.189f) * 0.5f + 0.5f);
 
-    r *= bd->flash * br_scale;
-    g *= bd->flash * br_scale;
-    b *= bd->flash * br_scale;
-
-    uint8_t cr = r > 255 ? 255 : (uint8_t)r;
-    uint8_t cg = g > 255 ? 255 : (uint8_t)g;
-    uint8_t cb = b > 255 ? 255 : (uint8_t)b;
+    float boosted = bd->flash * bd->flash;
+    uint8_t cr = (uint8_t)(r * 255.0f * boosted * br_scale);
+    uint8_t cg = (uint8_t)(g * 255.0f * boosted * br_scale);
+    uint8_t cb = (uint8_t)(b * 255.0f * boosted * br_scale);
 
     for (int k = 0; k < F87_KEY_COUNT; k++) {
         frame->keys[k][0] = cr;
