@@ -103,19 +103,19 @@ cd build && ctest --output-on-failure
 
 ## Project Status
 
-- Faz 0-2: Complete (lib + CLI + tools + tests)
-- Faz 2.5: Complete — protocol rewrite (cmd 0x06/0x0A/0x84/0x04)
-- Faz 3: Complete — hardware testing, effect/brightness/speed confirmed
-- Faz 3.5: In progress — software animation engine (per-key animation limited by firmware flicker)
-- Faz 4: GTK GUI (not started)
-- Faz 5: Sensor integration, profiles, daemon mode (not started)
+- Faz 0-3: Complete (lib + CLI + protocol + hardware testing)
+- Faz 4: Sensor integration — CPU/GPU temp → per-key color (not started)
+- Faz 5: GTK4 GUI (not started)
+- Faz 6: Daemon mode, profiles, wireless support (not started)
 
-## Known Limitations
+## Known Limitations (Firmware)
 
-- **Per-key animation flicker:** Config write (cmd 0x04) causes brief LED reset. Smooth per-key animation not possible with current firmware. Frame-only sends (cmd 0x06 without config write) do not update display.
-- **Breathing color control:** Single-color breathing not yet decoded. Hardware breathing always uses colorful/random mode. May require Report ID 0x39 (speed/brightness separate protocol).
+These are hardware/firmware constraints that cannot be resolved in software:
+
 - **Side/battery light color:** Only predefined modes (off/rainbow/breath mix/static red/breath red). Color is hardcoded in firmware — not changeable even in Windows software.
-- **Effect IDs 6, 9, 14:** Not present in F87 TK firmware — commands with these IDs have no effect.
+- **Software-driven animation:** Config write (cmd 0x04) causes brief LED reset on every frame. Frame-only sends (cmd 0x06 without config write) do not update display. Smooth per-key animation is not possible with this firmware.
+- **Breathing color control:** Single-color breathing not decoded. Hardware breathing always uses colorful/random mode. May require Report ID 0x39 (not yet reverse-engineered).
+- **Effect IDs 6, 9, 14:** Not present in F87 TK firmware — keyboard skips these IDs.
 - **USB timing:** Commands sent too rapidly (~<200ms apart) can cause keyboard reset. 5ms delay between USB transfers required.
 
 ## Key Layout Quirks
