@@ -9,7 +9,8 @@
 #include <linux/input.h>
 #include <sys/ioctl.h>
 
-#define F87_ANIM_FRAME_US  33333  /* ~30fps = 33.3ms */
+#define F87_ANIM_FRAME_US_30  33333  /* ~30fps = 33.3ms */
+#define F87_ANIM_FRAME_US_60  16666  /* ~60fps = 16.6ms */
 
 uint64_t f87_time_us(void)
 {
@@ -197,9 +198,10 @@ static void *anim_thread_func(void *arg)
         }
 
         /* Sleep to maintain target frame rate */
+        uint64_t target_us = ctx->frame_time_us;
         uint64_t elapsed = f87_time_us() - t0;
-        if (elapsed < F87_ANIM_FRAME_US)
-            usleep((useconds_t)(F87_ANIM_FRAME_US - elapsed));
+        if (elapsed < target_us)
+            usleep((useconds_t)(target_us - elapsed));
 
         /* FPS counter (prints every 3 seconds) */
         if (ctx->effect_ctx.frame_count % 90 == 0 && ctx->effect_ctx.frame_count > 0) {
@@ -268,6 +270,12 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
         ctx->input_fd = find_keyboard_input();
         /* Non-fatal if input not available */
     }
+
+    /* Set frame rate: override from config, or auto (30fps SW, 60fps music) */
+    if (ctx->config.fps > 0)
+        ctx->frame_time_us = 1000000ULL / (uint64_t)ctx->config.fps;
+    else
+        ctx->frame_time_us = effect->needs_audio ? F87_ANIM_FRAME_US_60 : F87_ANIM_FRAME_US_30;
 
     atomic_store(&ctx->running, true);
 

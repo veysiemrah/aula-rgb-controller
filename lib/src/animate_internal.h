@@ -60,6 +60,9 @@ struct f87_anim_ctx {
     /* Audio ring buffer (NULL if no audio) */
     f87_audio_ring_t *audio_ring;
 
+    /* Frame timing */
+    uint64_t frame_time_us;  /* Target frame time in microseconds */
+
     /* Input fd for reactive effects (-1 if not needed) */
     int input_fd;
 };
