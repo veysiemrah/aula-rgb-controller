@@ -18,6 +18,7 @@ typedef enum {
     F87_SW_HEATMAP    = 103,
     F87_SW_RADAR      = 104,
     F87_SW_LIGHTNING  = 105,
+    F87_SW_SENSOR     = 106,
     /* Reactive software effects (need /dev/input) */
     F87_SW_EXPLODE    = 110,
     F87_SW_RIPPLE     = 111,
@@ -39,6 +40,8 @@ typedef struct {
     f87_audio_source_t audio_source; /* Monitor or mic (music effects only) */
     int fps;                         /* Target FPS (0 = auto: 30 for SW, 60 for music) */
     float gain;                      /* Audio gain: 0=auto-gain, >0=fixed multiplier */
+    const char *sensor_profile;      /* Sensor profile name (NULL = "developer") */
+    const char *sensor_config_path;  /* Custom config path (NULL = use profile) */
 } f87_anim_config_t;
 
 /* Start animation — launches threads, returns context. Non-blocking. */

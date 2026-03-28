@@ -537,6 +537,7 @@ static int parse_sw_effect(const char *name)
         {"typewriter", F87_SW_TYPEWRITER},
         {"life",       F87_SW_LIFE},
         {"keyheat",    F87_SW_KEYHEAT},
+        {"sensor",     F87_SW_SENSOR},
         {NULL, 0}
     };
     for (int i = 0; map[i].name; i++) {
@@ -592,6 +593,10 @@ static int cmd_animate(f87_ctx *ctx, int argc, char **argv)
             config.fps = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--gain") == 0 && i + 1 < argc) {
             config.gain = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--profile") == 0 && i + 1 < argc) {
+            config.sensor_profile = argv[++i];
+        } else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) {
+            config.sensor_config_path = argv[++i];
         } else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
             f87_color c;
             if (parse_color(argv[i], &c) == 0) {

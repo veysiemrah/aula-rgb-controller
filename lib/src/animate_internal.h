@@ -25,6 +25,8 @@ typedef struct {
     uint64_t frame_count;
     uint64_t start_time_us;
     float gain;                /* Audio gain: 0=auto, >0=fixed multiplier */
+    const char *sensor_profile;
+    const char *sensor_config_path;
     void *effect_data;         /* Effect-private state */
 } f87_effect_ctx_t;
 

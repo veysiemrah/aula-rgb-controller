@@ -487,6 +487,182 @@ static const f87_sw_effect_t effect_lightning = {
     .on_key = NULL, .destroy = lightning_destroy,
 };
 
+/* ===== SENSOR EFFECT ===== */
+#ifdef F87_HAS_JSON
+
+#include "sensor.h"
+#include "sensor_config.h"
+
+typedef struct {
+    f87_sensor_profile_t profile;
+    f87_sensor_ctx_t sensor_ctx;
+    int blink_counter;
+} sensor_effect_data_t;
+
+static void sensor_value_to_color(float v, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    if (v < 0.2f) {
+        float t = v / 0.2f;
+        *r = 0; *g = 0; *b = (uint8_t)(t * 200.0f);
+    } else if (v < 0.4f) {
+        float t = (v - 0.2f) / 0.2f;
+        *r = 0; *g = (uint8_t)((0.4f + t * 0.6f) * 255.0f); *b = (uint8_t)((1 - t) * 200.0f);
+    } else if (v < 0.6f) {
+        float t = (v - 0.4f) / 0.2f;
+        *r = (uint8_t)(t * 255.0f); *g = 255; *b = 0;
+    } else if (v < 0.8f) {
+        float t = (v - 0.6f) / 0.2f;
+        *r = 255; *g = (uint8_t)((1 - t * 0.6f) * 255.0f); *b = 0;
+    } else {
+        float t = (v - 0.8f) / 0.2f;
+        if (t > 1.0f) t = 1.0f;
+        *r = 255; *g = (uint8_t)((0.4f - t * 0.4f) * 255.0f); *b = 0;
+    }
+}
+
+static int sensor_effect_init(f87_effect_ctx_t *ctx)
+{
+    sensor_effect_data_t *sd = calloc(1, sizeof(sensor_effect_data_t));
+    if (!sd) return F87_ERR_NOMEM;
+
+    const f87_key_info *layout = f87_key_layout;
+    int key_count = F87_KEY_COUNT;
+
+    int rc;
+    if (ctx->sensor_config_path) {
+        rc = f87_sensor_config_load(ctx->sensor_config_path, &sd->profile, layout, key_count);
+    } else {
+        const char *profile = ctx->sensor_profile ? ctx->sensor_profile : "developer";
+        rc = f87_sensor_config_builtin(profile, &sd->profile, layout, key_count);
+    }
+
+    if (rc < 0) {
+        fprintf(stderr, "f87: failed to load sensor config, trying developer\n");
+        rc = f87_sensor_config_builtin("developer", &sd->profile, layout, key_count);
+        if (rc < 0) {
+            free(sd);
+            return -1;
+        }
+    }
+
+    /* Initialize active sensors from profile */
+    for (int i = 0; i < sd->profile.mapping_count; i++) {
+        f87_sensor_mapping_t *m = &sd->profile.mappings[i];
+        const f87_sensor_t *s = f87_sensor_find(m->sensor_name);
+        if (!s) { m->sensor_index = -1; continue; }
+
+        int idx = sd->sensor_ctx.active_count;
+        sd->sensor_ctx.active[idx].sensor = s;
+        sd->sensor_ctx.active[idx].interval_ms = m->interval_ms;
+        sd->sensor_ctx.active[idx].next_read_us = 0;
+        m->sensor_index = idx;
+
+        if (s->init(&sd->sensor_ctx.active[idx].ctx) < 0) {
+            fprintf(stderr, "f87: sensor '%s' init failed, skipping\n", s->name);
+            m->sensor_index = -1;
+            continue;
+        }
+        sd->sensor_ctx.active_count++;
+    }
+
+    if (sd->sensor_ctx.active_count > 0)
+        f87_sensor_thread_start(&sd->sensor_ctx);
+
+    ctx->effect_data = sd;
+    return F87_OK;
+}
+
+static void sensor_effect_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
+                                  const f87_audio_data_t *audio)
+{
+    (void)audio;
+    sensor_effect_data_t *sd = ctx->effect_data;
+    float br_scale = (float)ctx->brightness / 4.0f;
+
+    sd->blink_counter++;
+    int blink_on = (sd->blink_counter / 15) % 2;
+
+    pthread_mutex_lock(&sd->sensor_ctx.data.mutex);
+
+    for (int i = 0; i < sd->profile.mapping_count; i++) {
+        f87_sensor_mapping_t *m = &sd->profile.mappings[i];
+        if (m->sensor_index < 0) continue;
+
+        float value = sd->sensor_ctx.data.values[m->sensor_index];
+        int error = sd->sensor_ctx.data.error[m->sensor_index];
+
+        if (m->mode == F87_SENSOR_MODE_COLOR) {
+            uint8_t r, g, b;
+            sensor_value_to_color(value, &r, &g, &b);
+
+            for (int k = 0; k < m->key_count; k++) {
+                int kid = m->key_ids[k];
+                if (error && !blink_on) {
+                    frame->keys[kid][0] = 0;
+                    frame->keys[kid][1] = 0;
+                    frame->keys[kid][2] = 0;
+                } else {
+                    frame->keys[kid][0] = (uint8_t)((float)r * br_scale);
+                    frame->keys[kid][1] = (uint8_t)((float)g * br_scale);
+                    frame->keys[kid][2] = (uint8_t)((float)b * br_scale);
+                }
+            }
+        } else {
+            /* Bar mode */
+            for (int k = 0; k < m->key_count; k++) {
+                int kid = m->key_ids[k];
+                float key_pos = (float)k / (float)m->key_count;
+                float key_end = (float)(k + 1) / (float)m->key_count;
+
+                if (error && !blink_on) {
+                    frame->keys[kid][0] = 0;
+                    frame->keys[kid][1] = 0;
+                    frame->keys[kid][2] = 0;
+                    continue;
+                }
+
+                if (value >= key_end) {
+                    uint8_t r, g, b;
+                    sensor_value_to_color(key_end, &r, &g, &b);
+                    frame->keys[kid][0] = (uint8_t)((float)r * br_scale);
+                    frame->keys[kid][1] = (uint8_t)((float)g * br_scale);
+                    frame->keys[kid][2] = (uint8_t)((float)b * br_scale);
+                } else if (value > key_pos) {
+                    float fill = (value - key_pos) / (key_end - key_pos);
+                    uint8_t r, g, b;
+                    sensor_value_to_color(value, &r, &g, &b);
+                    frame->keys[kid][0] = (uint8_t)((float)r * fill * br_scale);
+                    frame->keys[kid][1] = (uint8_t)((float)g * fill * br_scale);
+                    frame->keys[kid][2] = (uint8_t)((float)b * fill * br_scale);
+                }
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&sd->sensor_ctx.data.mutex);
+}
+
+static void sensor_effect_destroy(f87_effect_ctx_t *ctx)
+{
+    sensor_effect_data_t *sd = ctx->effect_data;
+    if (!sd) return;
+
+    if (sd->sensor_ctx.active_count > 0)
+        f87_sensor_thread_stop(&sd->sensor_ctx);
+
+    free(sd);
+    ctx->effect_data = NULL;
+}
+
+static const f87_sw_effect_t effect_sensor = {
+    .name = "Sensor", .id = F87_SW_SENSOR,
+    .needs_audio = false, .needs_input = false,
+    .init = sensor_effect_init, .render = sensor_effect_render,
+    .on_key = NULL, .destroy = sensor_effect_destroy,
+};
+
+#endif /* F87_HAS_JSON */
+
 /* ===== EFFECT REGISTRY ===== */
 
 static const f87_sw_effect_t *all_effects[] = {
@@ -496,6 +672,9 @@ static const f87_sw_effect_t *all_effects[] = {
     &effect_heatmap,
     &effect_radar,
     &effect_lightning,
+#ifdef F87_HAS_JSON
+    &effect_sensor,
+#endif
     NULL
 };
 

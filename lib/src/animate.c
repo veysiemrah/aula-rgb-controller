@@ -251,6 +251,8 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
     ctx->effect_ctx.brightness = ctx->config.brightness;
     ctx->effect_ctx.speed = ctx->config.speed;
     ctx->effect_ctx.gain = ctx->config.gain;
+    ctx->effect_ctx.sensor_profile = ctx->config.sensor_profile;
+    ctx->effect_ctx.sensor_config_path = ctx->config.sensor_config_path;
     ctx->effect_ctx.frame_count = 0;
     ctx->effect_ctx.start_time_us = f87_time_us();
     ctx->effect_ctx.effect_data = NULL;
