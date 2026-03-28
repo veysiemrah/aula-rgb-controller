@@ -173,11 +173,14 @@ static void ripple_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
             float dx = (float)(f87_key_layout[k].col - f87_key_layout[src].col);
             float dy = (float)(f87_key_layout[k].row - f87_key_layout[src].row) * 2.0f;
             float dist = sqrtf(dx * dx + dy * dy);
-            float wave = sinf(dist * 2.0f - rd->waves[w].radius * 3.0f);
-            wave = (wave + 1.0f) / 2.0f;
-            float falloff = 1.0f - dist / (rd->waves[w].radius + 1.0f);
-            if (falloff < 0) falloff = 0;
-            total += wave * falloff * rd->waves[w].strength;
+            /* Multiple concentric rings — smooth cosine ripple */
+            if (dist < rd->waves[w].radius + 2.0f) {
+                float phase = dist * 1.5f - rd->waves[w].radius * 1.5f;
+                float wave = cosf(phase) * 0.5f + 0.5f;
+                float falloff = 1.0f - dist / (rd->waves[w].radius + 3.0f);
+                if (falloff < 0) falloff = 0;
+                total += wave * falloff * rd->waves[w].strength;
+            }
         }
         if (total > 1.0f) total = 1.0f;
         frame->keys[k][0] = (uint8_t)((float)ctx->base_color[0] * total * br_scale);
@@ -281,9 +284,17 @@ static void life_on_key(f87_effect_ctx_t *ctx, int key_id)
     life_data_t *ld = ctx->effect_data;
     int row = f87_key_layout[key_id].row;
     int col = f87_key_layout[key_id].col;
-    if (row < GRID_ROWS && col < GRID_COLS) {
-        ld->grid[row][col] = 1;
-        ld->brightness_map[row][col] = 1.0f;
+    if (row >= GRID_ROWS || col >= GRID_COLS) return;
+
+    /* Seed a small cluster around the pressed key for survival */
+    for (int dr = -1; dr <= 1; dr++) {
+        for (int dc = -1; dc <= 1; dc++) {
+            int r = row + dr, c = col + dc;
+            if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
+                ld->grid[r][c] = 1;
+                ld->brightness_map[r][c] = 1.0f;
+            }
+        }
     }
 }
 
