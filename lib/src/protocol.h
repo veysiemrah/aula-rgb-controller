@@ -57,7 +57,7 @@
 #define F87_PLANE_B           (F87_LED_DATA_OFFSET + F87_PLANE_SIZE * 2) /* 260 */
 
 /* Custom profile (cmd 0x0A) offsets */
-#define F87_CUSTOM_LED0_OFFSET 29   /* LED[0] RGB starts here (static color) */
+#define F87_CUSTOM_LED0_OFFSET 30   /* LED[0] RGB starts here (confirmed via capture) */
 #define F87_CUSTOM_TERMINATOR_OFFSET 514  /* 0x5A 0xA5 */
 
 /* Config response field offsets (cmd 0x84 / 0x04) */
@@ -138,10 +138,12 @@ void f87_pkt_build_led_custom(f87_packet *pkt, f87_color color);
 void f87_pkt_build_config_read(f87_packet *pkt);
 
 /* Config write (cmd 0x04) — copies cached config, modifies fields.
- * speed = 0xFF means "don't change speed" (preserve current value). */
+ * speed = 0xFF means "don't change speed" (preserve current value).
+ * colorful: 0=single color (flag nibble=0), 1=colorful (flag nibble=7), 0xFF=don't change */
 void f87_pkt_build_config_write(f87_packet *pkt, const uint8_t *config,
                                  int config_len, uint8_t effect_id,
-                                 uint8_t brightness, uint8_t speed);
+                                 uint8_t brightness, uint8_t speed,
+                                 uint8_t colorful);
 
 /* Legacy direct mode (cmd 0x08, OpenRGB compat) */
 void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
@@ -151,10 +153,22 @@ void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
 int  f87_pkt_send(f87_device *dev, const f87_packet *pkt);
 int  f87_pkt_recv(f87_device *dev, f87_packet *pkt, int timeout_ms);
 
+/* Send/recv with custom report ID (for Report 0x35-0x3C) */
+int  f87_pkt_send_report(f87_device *dev, uint8_t report_id,
+                          const uint8_t *data, int len);
+
+/* Direct mode (CMD 0x08) enable/disable via Report 0x3C */
+int  f87_direct_mode_enable(f87_device *dev);
+int  f87_direct_mode_disable(f87_device *dev);
+
+/* Send a direct mode frame (CMD 0x08, interleaved RGB) */
+int  f87_direct_send_frame(f87_device *dev, const f87_color *colors,
+                            const uint8_t *led_indices, int num_keys);
+
 /* Config read-modify-write helpers */
 int  f87_config_read(f87_device *dev);
 int  f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
-                      uint8_t speed);
+                      uint8_t speed, uint8_t colorful);
 
 /* Key layout data (88-key TKL, includes ISO key K88) */
 #define F87_KEY_COUNT 88

@@ -27,7 +27,7 @@ For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
 - **4-step protocol**: (1) LED data → (2) config query 0x84 → (3) GET_REPORT → (4) config write 0x04
 - **Model query:** `{0x06, 0x82, 0x01, 0x00, 0x01, 0x00, 0x06}` → 14-byte response (byte 13=0x66)
 - **Per-key color (0x06):** planar RGB, 126 bytes/channel at offsets 8, 134, 260
-- **Static color (0x0A):** LED[0] at offset 29-31 = all-keys color, effect_id=0x01
+- **Static/effect color (0x0A):** All LED positions filled with RGB triplets from offset 29, effect_id=0x01 for static
 - **Config byte 17:** custom mode flag (0=hw effect, 1=custom per-key)
 - **Config byte 18:** effect_id (see effect table below)
 - **Config byte 26:** side light effect (0=off, 1=rainbow, 2=breath mix, 3=static red, 4=breath red)
@@ -113,8 +113,7 @@ cd build && ctest --output-on-failure
 These are hardware/firmware constraints that cannot be resolved in software:
 
 - **Side/battery light color:** Only predefined modes (off/rainbow/breath mix/static red/breath red). Color is hardcoded in firmware — not changeable even in Windows software.
-- **Software-driven animation:** Config write (cmd 0x04) causes brief LED reset on every frame. Frame-only sends (cmd 0x06 without config write) do not update display. Smooth per-key animation is not possible with this firmware.
-- **Breathing color control:** Single-color breathing not decoded. Hardware breathing always uses colorful/random mode. May require Report ID 0x39 (not yet reverse-engineered).
+- **Software-driven animation:** Direct mode (CMD 0x08) works at 30fps after Report 0x3C enable. Config write (cmd 0x04) causes brief LED reset — use CMD 0x08 for smooth animation instead.
 - **Effect IDs 6, 9, 14:** Not present in F87 TK firmware — keyboard skips these IDs.
 - **USB timing:** Commands sent too rapidly (~<200ms apart) can cause keyboard reset. 5ms delay between USB transfers required.
 

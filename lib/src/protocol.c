@@ -62,25 +62,29 @@ void f87_pkt_build_led_planar(f87_packet *pkt, const f87_color *colors,
     }
 }
 
+
 /*
  * Build a custom color profile packet (cmd 0x0A).
  *
- * For static single-color mode (effect_id=0x01), the keyboard uses
- * LED[0] (bytes 29-31) as the color for ALL keys.
+ * Fills all LED positions with the requested color using RGB triplets.
+ * The full profile (not just LED[0]) is required for breathing and
+ * other effects to use single-color mode correctly.
  */
 void f87_pkt_build_led_custom(f87_packet *pkt, f87_color color)
 {
     f87_pkt_init(pkt);
     pkt->data[0] = F87_REPORT_ID;
-    pkt->data[1] = F87_CMD_LED_CUSTOM;  /* 0x0A */
+    pkt->data[1] = F87_CMD_LED_CUSTOM;
+    pkt->data[4] = 0x01;
     pkt->data[7] = 0x02;
 
-    /* LED[0] = the static color for all keys */
-    pkt->data[F87_CUSTOM_LED0_OFFSET]     = color.r;
-    pkt->data[F87_CUSTOM_LED0_OFFSET + 1] = color.g;
-    pkt->data[F87_CUSTOM_LED0_OFFSET + 2] = color.b;
+    /* Fill all positions with RGB triplets */
+    for (int i = 29; i + 2 < F87_CUSTOM_TERMINATOR_OFFSET; i += 3) {
+        pkt->data[i]     = color.r;
+        pkt->data[i + 1] = color.g;
+        pkt->data[i + 2] = color.b;
+    }
 
-    /* Terminator */
     pkt->data[F87_CUSTOM_TERMINATOR_OFFSET]     = 0x5A;
     pkt->data[F87_CUSTOM_TERMINATOR_OFFSET + 1] = 0xA5;
 }
@@ -105,7 +109,8 @@ void f87_pkt_build_config_read(f87_packet *pkt)
  */
 void f87_pkt_build_config_write(f87_packet *pkt, const uint8_t *config,
                                  int config_len, uint8_t effect_id,
-                                 uint8_t brightness, uint8_t speed)
+                                 uint8_t brightness, uint8_t speed,
+                                 uint8_t colorful)
 {
     f87_pkt_init(pkt);
     pkt->data[0] = F87_REPORT_ID;
@@ -127,11 +132,16 @@ void f87_pkt_build_config_write(f87_packet *pkt, const uint8_t *config,
         int param_off = F87_CFG_EFFECT_PARAM(effect_id);
         if (param_off + 1 < F87_CONFIG_RESP_SIZE) {
             pkt->data[param_off] = brightness;
-            if (speed != 0xFF) {
-                /* Preserve lower nibble (flags), set upper nibble (speed) */
-                uint8_t flags = pkt->data[param_off + 1] & 0x0F;
-                pkt->data[param_off + 1] = (speed << 4) | flags;
-            }
+            uint8_t cur = pkt->data[param_off + 1];
+            uint8_t upper = (speed != 0xFF) ? (speed << 4) : (cur & 0xF0);
+            uint8_t lower;
+            if (colorful == 0)
+                lower = 0x00;       /* single color */
+            else if (colorful == 1)
+                lower = 0x07;       /* colorful/random */
+            else
+                lower = cur & 0x0F; /* 0xFF = preserve */
+            pkt->data[param_off + 1] = upper | lower;
         }
     }
 }
@@ -176,7 +186,7 @@ int f87_config_read(f87_device *dev)
  * Reads config first if not cached, then writes modified version.
  */
 int f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
-                     uint8_t speed)
+                     uint8_t speed, uint8_t colorful)
 {
     if (!dev)
         return -1;
@@ -201,7 +211,7 @@ int f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
     /* Step 4: Write modified config */
     f87_packet pkt;
     f87_pkt_build_config_write(&pkt, dev->config, F87_CONFIG_RESP_SIZE,
-                                effect_id, brightness, speed);
+                                effect_id, brightness, speed, colorful);
     usleep(F87_CMD_DELAY_US);
     int rc = f87_pkt_send(dev, &pkt);
     if (rc < 0)
@@ -217,7 +227,105 @@ int f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
     return 0;
 }
 
-/* Legacy direct mode (cmd 0x08, OpenRGB compat, unconfirmed on F87 TK) */
+/*
+ * Send a feature report with a custom report ID.
+ * Used for Report IDs 0x35-0x3C (separate from the main 0x06 protocol).
+ */
+int f87_pkt_send_report(f87_device *dev, uint8_t report_id,
+                         const uint8_t *data, int len)
+{
+    if (!dev || !data || !dev->usb_handle || len <= 0)
+        return -1;
+
+    uint16_t wvalue = 0x0300 | report_id;
+
+    int rc = libusb_control_transfer(
+        (libusb_device_handle *)dev->usb_handle,
+        F87_HID_RT_OUT,
+        F87_HID_SET_REPORT,
+        wvalue,
+        F87_IFACE_NUM,
+        (unsigned char *)data,
+        (uint16_t)len,
+        F87_TIMEOUT_MS
+    );
+
+    return (rc < 0) ? -1 : rc;
+}
+
+/*
+ * Enable direct mode (CMD 0x08) via Report 0x3C.
+ *
+ * The AULA software sends this sequence before starting CMD 0x08:
+ *   1. Report 0x39: [39 20 06 00 01 00] — param reset
+ *   2. Report 0x3C: [3c 20 01 00]       — ENABLE direct mode
+ *   3. Report 0x39: [39 20 06 01 01 00] — param confirm
+ */
+int f87_direct_mode_enable(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+
+    /* Step 1: param reset via Report 0x39 */
+    uint8_t reset[] = {0x39, 0x20, 0x06, 0x00, 0x01, 0x00};
+    int rc = f87_pkt_send_report(dev, 0x39, reset, sizeof(reset));
+    if (rc < 0) return rc;
+    usleep(F87_CMD_DELAY_US);
+
+    /* Step 2: enable via Report 0x3C */
+    uint8_t enable[] = {0x3C, 0x20, 0x01, 0x00};
+    rc = f87_pkt_send_report(dev, 0x3C, enable, sizeof(enable));
+    if (rc < 0) return rc;
+    usleep(F87_CMD_DELAY_US);
+
+    /* Step 3: param confirm via Report 0x39 */
+    uint8_t confirm[] = {0x39, 0x20, 0x06, 0x01, 0x01, 0x00};
+    rc = f87_pkt_send_report(dev, 0x39, confirm, sizeof(confirm));
+    if (rc < 0) return rc;
+    usleep(F87_CMD_DELAY_US);
+
+    return 0;
+}
+
+/*
+ * Disable direct mode — restore previous hardware effect.
+ */
+int f87_direct_mode_disable(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+
+    /* Read current config and write it back to restore hardware effect */
+    int rc = f87_config_read(dev);
+    if (rc < 0) return rc;
+
+    uint8_t eid = dev->config[F87_CFG_EFFECT_ID];
+    uint8_t brightness = F87_BRIGHTNESS_MAX;
+    if (eid > 0 && eid <= 18)
+        brightness = dev->config[F87_CFG_EFFECT_PARAM(eid)];
+
+    return f87_config_write(dev, eid, brightness, 0xFF, 0xFF);
+}
+
+/*
+ * Send a direct mode LED frame (CMD 0x08, interleaved RGB).
+ * Must call f87_direct_mode_enable() first!
+ *
+ * Layout: 520 bytes, interleaved RGB (3 bytes per LED at offset 8):
+ *   led_index * 3 + 8 = offset for that LED's R byte
+ */
+int f87_direct_send_frame(f87_device *dev, const f87_color *colors,
+                           const uint8_t *led_indices, int num_keys)
+{
+    if (!dev || !colors || !led_indices)
+        return -1;
+
+    f87_packet pkt;
+    f87_pkt_build_direct_leds(&pkt, colors, led_indices, num_keys);
+    return f87_pkt_send(dev, &pkt);
+}
+
+/* Legacy direct mode packet builder (cmd 0x08, interleaved RGB) */
 void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
                                 const uint8_t *led_indices, int num_keys)
 {

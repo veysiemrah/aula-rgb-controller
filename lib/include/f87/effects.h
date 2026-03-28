@@ -61,6 +61,7 @@ typedef struct {
     f87_mode mode;
     uint8_t speed;          /* 0-4  (0=slowest, 4=fastest) */
     uint8_t brightness;     /* 1-4  (1=dimmest, 4=brightest) */
+    uint8_t colorful;       /* 0=single color, 1=colorful/random */
     f87_color color1;       /* primary color (for static, breathing, etc.) */
     f87_color color2;
     f87_direction direction;

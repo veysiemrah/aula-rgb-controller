@@ -72,7 +72,7 @@ int f87_set_effect(f87_device *dev, const f87_effect *effect)
     if (rc < 0)
         return rc;
 
-    return f87_config_write(dev, effect_id, brightness, speed);
+    return f87_config_write(dev, effect_id, brightness, speed, effect->colorful ? 1 : 0);
 }
 
 /*
@@ -90,12 +90,13 @@ int f87_get_current_effect(f87_device *dev, f87_effect *effect)
     memset(effect, 0, sizeof(*effect));
     effect->mode = (f87_mode)dev->config[F87_CFG_EFFECT_ID];
 
-    /* Read per-effect brightness and speed */
+    /* Read per-effect brightness, speed and colorful flag */
     uint8_t eid = dev->config[F87_CFG_EFFECT_ID];
     if (eid > 0 && eid <= 18) {
         int off = F87_CFG_EFFECT_PARAM(eid);
         effect->brightness = dev->config[off];
         effect->speed = (dev->config[off + 1] >> 4) & 0x0F;
+        effect->colorful = (dev->config[off + 1] & 0x0F) == 0x07 ? 1 : 0;
     }
 
     return 0;
@@ -121,7 +122,7 @@ int f87_set_side_light(f87_device *dev, f87_side_mode mode)
     if (eid > 0 && eid <= 18)
         brightness = dev->config[F87_CFG_EFFECT_PARAM(eid)];
 
-    return f87_config_write(dev, eid, brightness, 0xFF);
+    return f87_config_write(dev, eid, brightness, 0xFF, 0xFF);
 }
 
 /*
@@ -143,7 +144,7 @@ int f87_set_battery_light(f87_device *dev, f87_side_mode mode)
     if (eid > 0 && eid <= 18)
         brightness = dev->config[F87_CFG_EFFECT_PARAM(eid)];
 
-    return f87_config_write(dev, eid, brightness, 0xFF);
+    return f87_config_write(dev, eid, brightness, 0xFF, 0xFF);
 }
 
 const char *f87_mode_name(f87_mode mode)

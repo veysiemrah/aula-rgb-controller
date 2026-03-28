@@ -21,7 +21,7 @@ int f87_set_brightness(f87_device *dev, uint8_t level)
         return rc;
 
     uint8_t effect_id = dev->config[F87_CFG_EFFECT_ID];
-    return f87_config_write(dev, effect_id, level, 0xFF);
+    return f87_config_write(dev, effect_id, level, 0xFF, 0xFF);
 }
 
 int f87_get_brightness(f87_device *dev, uint8_t *level)
@@ -54,7 +54,7 @@ int f87_lights_off(f87_device *dev)
     if (rc < 0)
         return rc;
 
-    return f87_config_write(dev, 0x00, F87_BRIGHTNESS_MAX, 0xFF);
+    return f87_config_write(dev, 0x00, F87_BRIGHTNESS_MAX, 0xFF, 0xFF);
 }
 
 int f87_set_key_color(f87_device *dev, uint8_t key_id, f87_color color)
@@ -146,7 +146,7 @@ int f87_apply(f87_device *dev)
         if (brightness < F87_BRIGHTNESS_MIN)
             brightness = F87_BRIGHTNESS_MAX;
 
-        rc = f87_config_write(dev, F87_MODE_STATIC, brightness, 0xFF);
+        rc = f87_config_write(dev, F87_MODE_STATIC, brightness, 0xFF, 0);
     } else {
         /* Per-key: cmd 0x06 planar + effect_id 0x12 (custom) */
         f87_pkt_build_led_planar(&pkt, dev->key_colors, f87_led_index,
@@ -163,7 +163,7 @@ int f87_apply(f87_device *dev)
         if (brightness < F87_BRIGHTNESS_MIN)
             brightness = F87_BRIGHTNESS_MAX;
 
-        rc = f87_config_write(dev, F87_MODE_CUSTOM, brightness, 0xFF);
+        rc = f87_config_write(dev, F87_MODE_CUSTOM, brightness, 0xFF, 0xFF);
     }
 
     if (rc < 0)

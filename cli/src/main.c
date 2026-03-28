@@ -171,6 +171,7 @@ static int cmd_info(f87_ctx *ctx)
                f87_mode_name(cur_effect.mode), cur_effect.mode);
         printf("  Brightness:   %d/4\n", cur_effect.brightness);
         printf("  Speed:        %d/4\n", cur_effect.speed);
+        printf("  Color mode:   %s\n", cur_effect.colorful ? "colorful" : "single");
     }
 
     f87_close(dev);
@@ -313,12 +314,15 @@ static int cmd_effect(f87_ctx *ctx, int argc, char **argv)
     f87_color color = F87_COLOR_RED;
     uint8_t bright = F87_BRIGHTNESS_MAX;
     uint8_t spd = 0xFF; /* don't change */
+    uint8_t colorful = 0; /* default: single color */
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--brightness") == 0 && i + 1 < argc) {
             bright = (uint8_t)atoi(argv[++i]);
         } else if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
             spd = (uint8_t)atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--colorful") == 0) {
+            colorful = 1;
         } else if (argv[i][0] != '-') {
             parse_color(argv[i], &color);
         }
@@ -334,6 +338,7 @@ static int cmd_effect(f87_ctx *ctx, int argc, char **argv)
     effect.mode = mode;
     effect.brightness = bright;
     effect.speed = spd;
+    effect.colorful = colorful;
     effect.color1 = color;
 
     int rc = f87_set_effect(dev, &effect);
