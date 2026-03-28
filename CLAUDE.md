@@ -73,8 +73,11 @@ For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
 - `lib/src/animate.c` — animation thread core, frame loop, input capture
 - `lib/src/animate_internal.h` — internal types: effect interface, context, frame buffer
 - `lib/src/ring_buffer.c` — lock-free SPSC ring buffer for audio data
-- `lib/src/effects_sw.c` — 6 non-reactive software effects (fire, matrix, plasma, heatmap, radar, lightning)
-- `lib/src/effects_sw_reactive.c` — 4 reactive software effects (explode, ripple, typewriter, life)
+- `lib/src/effects_sw.c` — 7 non-reactive software effects (fire, matrix, plasma, heatmap, radar, lightning, sensor)
+- `lib/src/effects_sw_reactive.c` — 5 reactive software effects (explode, ripple, typewriter, life, keyheat)
+- `lib/src/sensor.h` / `sensor.c` — sensor plugin interface, built-in sensors (cpu_temp, cpu_load, gpu_temp, ram_usage)
+- `lib/src/sensor_config.h` / `sensor_config.c` — JSON config parser for sensor-key mappings
+- `configs/sensor/*.json` — sensor profile configs (developer, gamer, system)
 - `lib/src/audio.c` — PulseAudio capture thread
 - `lib/src/spectrum.c` — KissFFT FFT, band grouping, beat detection
 - `lib/src/visualizer.c` — 5 music-reactive visualizers (spectrum, beat, energy, VU, freqmap)
@@ -120,17 +123,25 @@ cd build && ctest --output-on-failure
 ./f87ctl music spectrum
 ./f87ctl music beat ff0000
 ./f87ctl music vu
+
+# Sensor monitoring
+./f87ctl animate sensor
+./f87ctl animate sensor --profile gamer
+./f87ctl animate sensor --config configs/sensor/system.json
 ```
 
 ## Project Status
 
 - Faz 0-3: Complete (lib + CLI + protocol + hardware testing)
 - Faz 3.5: Software effects + music-reactive lighting (complete)
-  - 10 software effects: fire, matrix, plasma, heatmap, radar, lightning, explode, ripple, typewriter, life
+  - 11 software effects: fire, matrix, plasma, heatmap, radar, lightning, explode, ripple, typewriter, life, keyheat
   - 5 music visualizers: spectrum, beat, energy, VU, freqmap
   - Producer-consumer threading (audio + animation threads)
   - PulseAudio/PipeWire capture, KissFFT spectrum analysis, beat detection
-- Faz 4: Sensor integration — extended heatmap (CPU/GPU already in SW effects)
+- Faz 4: Sensor integration (complete)
+  - Plugin-based sensor interface with built-in sensors (cpu_temp, cpu_load, gpu_temp, ram_usage)
+  - JSON config for key-sensor mappings, color/bar display modes
+  - Built-in profiles: developer, gamer, system
 - Faz 5: GTK4 GUI (not started — will be primary user interface)
 - Faz 6: Daemon mode, profiles, wireless support (not started)
 

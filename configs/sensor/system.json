@@ -1,0 +1,9 @@
+{
+    "profile": "system",
+    "mappings": [
+        { "sensor": "cpu_temp", "keys": ["ESC"], "mode": "color", "interval_ms": 1000 },
+        { "sensor": "cpu_load", "keys": ["F1","F2","F3","F4","F5"], "mode": "bar", "interval_ms": 500 },
+        { "sensor": "gpu_temp", "keys": ["F6"], "mode": "color", "interval_ms": 1000 },
+        { "sensor": "ram_usage", "keys": ["F9","F10","F11","F12"], "mode": "bar", "interval_ms": 1000 }
+    ]
+}
