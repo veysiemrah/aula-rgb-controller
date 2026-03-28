@@ -5,6 +5,24 @@
 #include <string.h>
 #include <math.h>
 
+/* Apply gain to a value.
+ * gain=0: auto-gain using peak tracking.
+ * gain>0: fixed multiplier. */
+static float apply_gain(float value, float *peak, float gain)
+{
+    if (gain > 0.0f) {
+        float v = value * gain;
+        return v > 1.0f ? 1.0f : v;
+    }
+    /* Auto-gain */
+    if (value > *peak)
+        *peak = value;
+    *peak *= 0.999f;
+    if (*peak < 0.01f) *peak = 0.01f;
+    float v = value / *peak;
+    return v > 1.0f ? 1.0f : v;
+}
+
 /* ===== SPECTRUM VISUALIZER ===== */
 
 typedef struct {
@@ -28,14 +46,8 @@ static void spectrum_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     float smooth = 0.3f + (float)(4 - ctx->speed) * 0.1f;
 
     if (audio) {
-        for (int b = 0; b < F87_AUDIO_BANDS; b++) {
+        for (int b = 0; b < F87_AUDIO_BANDS; b++)
             sd->smooth_bands[b] += (audio->bands[b] - sd->smooth_bands[b]) * smooth;
-            /* Auto-gain per band */
-            if (sd->smooth_bands[b] > sd->peak_bands[b])
-                sd->peak_bands[b] = sd->smooth_bands[b];
-            sd->peak_bands[b] *= 0.999f;
-            if (sd->peak_bands[b] < 0.01f) sd->peak_bands[b] = 0.01f;
-        }
     } else {
         for (int b = 0; b < F87_AUDIO_BANDS; b++)
             sd->smooth_bands[b] *= 0.95f;
@@ -47,9 +59,7 @@ static void spectrum_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
         if (row >= F87_AUDIO_BANDS) continue;
 
         int band = F87_AUDIO_BANDS - 1 - row;
-        /* Normalize band level against its own peak */
-        float level = sd->smooth_bands[band] / sd->peak_bands[band];
-        if (level > 1.0f) level = 1.0f;
+        float level = apply_gain(sd->smooth_bands[band], &sd->peak_bands[band], ctx->gain);
         float max_col = level * 22.0f;
 
         if ((float)col < max_col) {
@@ -108,17 +118,8 @@ static void beat_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
 
     bd->flash *= decay;
 
-    /* Auto-gain: track peak energy, normalize against it */
     if (audio) {
-        if (audio->energy > bd->peak_energy)
-            bd->peak_energy = audio->energy;
-        /* Slowly decay peak so it adapts to volume changes */
-        bd->peak_energy *= 0.999f;
-        if (bd->peak_energy < 0.01f) bd->peak_energy = 0.01f;
-
-        /* Normalize energy to 0-1 range based on recent peak */
-        float normalized = audio->energy / bd->peak_energy;
-        if (normalized > 1.0f) normalized = 1.0f;
+        float normalized = apply_gain(audio->energy, &bd->peak_energy, ctx->gain);
 
         if (audio->beat) {
             bd->flash = 1.0f;
@@ -168,6 +169,7 @@ typedef struct {
     float wave_str[8];
     int wave_idx;
     int cooldown;
+    float peak_energy;
 } energy_viz_data_t;
 
 static int energy_viz_init(f87_effect_ctx_t *ctx)
@@ -187,12 +189,15 @@ static void energy_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     float cx = 10.0f, cy = 2.5f;
 
     ed->cooldown--;
-    if (audio && ed->cooldown <= 0 &&
-        (audio->beat || audio->energy > 0.4f)) {
-        ed->waves[ed->wave_idx % 8] = 0.1f;
-        ed->wave_str[ed->wave_idx % 8] = audio->energy;
-        ed->wave_idx++;
-        ed->cooldown = 3;
+    if (audio) {
+        float norm = apply_gain(audio->energy, &ed->peak_energy, ctx->gain);
+
+        if (ed->cooldown <= 0 && (audio->beat || norm > 0.3f)) {
+            ed->waves[ed->wave_idx % 8] = 0.1f;
+            ed->wave_str[ed->wave_idx % 8] = norm;
+            ed->wave_idx++;
+            ed->cooldown = 3;
+        }
     }
 
     for (int w = 0; w < 8; w++) {
@@ -262,15 +267,8 @@ static void vu_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     float br_scale = (float)ctx->brightness / 4.0f;
     float smooth = 0.3f + (float)(4 - ctx->speed) * 0.1f;
 
-    float target = audio ? audio->energy : 0.0f;
-
-    /* Auto-gain: normalize against recent peak */
-    if (target > vd->peak_energy)
-        vd->peak_energy = target;
-    vd->peak_energy *= 0.999f;
-    if (vd->peak_energy < 0.01f) vd->peak_energy = 0.01f;
-    target = target / vd->peak_energy;
-    if (target > 1.0f) target = 1.0f;
+    float raw = audio ? audio->energy : 0.0f;
+    float target = apply_gain(raw, &vd->peak_energy, ctx->gain);
 
     vd->smooth_level += (target - vd->smooth_level) * smooth;
 
@@ -329,6 +327,7 @@ static const f87_sw_effect_t viz_vu = {
 
 typedef struct {
     float smooth[F87_AUDIO_BANDS];
+    float peak[F87_AUDIO_BANDS];
 } freqmap_viz_data_t;
 
 static int freqmap_viz_init(f87_effect_ctx_t *ctx)
@@ -359,7 +358,7 @@ static void freqmap_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
         if (row >= F87_AUDIO_BANDS) continue;
 
         int band = F87_AUDIO_BANDS - 1 - row;
-        float v = fd->smooth[band];
+        float v = apply_gain(fd->smooth[band], &fd->peak[band], ctx->gain);
 
         frame->keys[k][0] = (uint8_t)((float)ctx->base_color[0] * v * br_scale);
         frame->keys[k][1] = (uint8_t)((float)ctx->base_color[1] * v * br_scale);

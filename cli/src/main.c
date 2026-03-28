@@ -589,6 +589,8 @@ static int cmd_animate(f87_ctx *ctx, int argc, char **argv)
             config.brightness = (uint8_t)atoi(argv[++i]);
         } else if (strcmp(argv[i], "--fps") == 0 && i + 1 < argc) {
             config.fps = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--gain") == 0 && i + 1 < argc) {
+            config.gain = (float)atof(argv[++i]);
         } else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
             f87_color c;
             if (parse_color(argv[i], &c) == 0) {
@@ -664,6 +666,8 @@ static int cmd_music(f87_ctx *ctx, int argc, char **argv)
                 config.audio_source = F87_AUDIO_MIC;
         } else if (strcmp(argv[i], "--fps") == 0 && i + 1 < argc) {
             config.fps = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--gain") == 0 && i + 1 < argc) {
+            config.gain = (float)atof(argv[++i]);
         } else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
             f87_color c;
             if (parse_color(argv[i], &c) == 0) {

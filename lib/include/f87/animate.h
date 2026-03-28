@@ -37,6 +37,7 @@ typedef struct {
     uint8_t speed;                   /* 0-4 (default: 2) */
     f87_audio_source_t audio_source; /* Monitor or mic (music effects only) */
     int fps;                         /* Target FPS (0 = auto: 30 for SW, 60 for music) */
+    float gain;                      /* Audio gain: 0=auto-gain, >0=fixed multiplier */
 } f87_anim_config_t;
 
 /* Start animation — launches threads, returns context. Non-blocking. */
