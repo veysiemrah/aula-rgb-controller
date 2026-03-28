@@ -6,13 +6,15 @@ Aula F87 TK keyboard RGB lighting control for Linux. Reverse-engineered USB HID 
 
 Three-layer design:
 - **libf87** (`lib/`) — shared C library, abstracts USB HID protocol via libusb
-- **f87ctl** (`cli/`) — command-line tool
-- **f87control** (`gui/`) — GTK4 GUI (not yet implemented)
+  - **animate** — software animation engine: thread management, frame loop, effect dispatch
+  - **audio/spectrum** — PulseAudio capture, KissFFT analysis, beat detection (optional, BUILD_AUDIO)
+- **f87ctl** (`cli/`) — command-line tool (test/development)
+- **f87control** (`gui/`) — GTK4 GUI (not yet implemented, will be primary UI)
 
 ## Build
 
 ```bash
-sudo apt install libusb-1.0-0-dev libjson-c-dev cmake build-essential  # Debian/Ubuntu
+sudo apt install libusb-1.0-0-dev libjson-c-dev libpulse-dev cmake build-essential  # Debian/Ubuntu
 mkdir build && cd build && cmake .. -DBUILD_GUI=OFF && make
 ```
 
@@ -68,10 +70,17 @@ For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
 - `lib/src/device.c` — USB device enumeration, open/close
 - `lib/src/lighting.c` — per-key color, apply (4-step protocol), brightness control
 - `lib/src/effects.c` — 16 hardware effects, side/battery light control
-- `lib/src/animate.c` — software animation engine (experimental, per-key animation limited by firmware)
-- `lib/src/color_util.c` — HSV-RGB conversion, color interpolation
+- `lib/src/animate.c` — animation thread core, frame loop, input capture
+- `lib/src/animate_internal.h` — internal types: effect interface, context, frame buffer
+- `lib/src/ring_buffer.c` — lock-free SPSC ring buffer for audio data
+- `lib/src/effects_sw.c` — 6 non-reactive software effects (fire, matrix, plasma, heatmap, radar, lightning)
+- `lib/src/effects_sw_reactive.c` — 4 reactive software effects (explode, ripple, typewriter, life)
+- `lib/src/audio.c` — PulseAudio capture thread
+- `lib/src/spectrum.c` — KissFFT FFT, band grouping, beat detection
+- `lib/src/visualizer.c` — 5 music-reactive visualizers (spectrum, beat, energy, VU, freqmap)
 - `lib/include/f87/animate.h` — animation public API
-- `cli/src/main.c` — CLI tool: list/info/brightness/effect/color/key/animate/raw
+- `lib/include/f87/audio_types.h` — audio data types
+- `cli/src/main.c` — CLI tool: list/info/brightness/effect/color/key/animate/music/raw
 - `tools/protocol_notes.md` — full protocol documentation
 - `tools/*.pcap` — USB capture files from Windows
 - `tools/*.py` — capture analysis scripts
@@ -99,13 +108,30 @@ cd build && ctest --output-on-failure
 ./f87ctl brightness 3
 ./f87ctl off
 ./f87ctl raw send "06 82 01 00 01 00 06"
+
+# Software animation test (foreground, Ctrl+C to stop)
+./f87ctl animate fire
+./f87ctl animate plasma --speed 3
+./f87ctl animate lightning 8800ff
+./f87ctl animate explode           # type to see explosions
+./f87ctl animate typewriter         # type to see heat trails
+
+# Music reactive (play music first, Ctrl+C to stop)
+./f87ctl music spectrum
+./f87ctl music beat ff0000
+./f87ctl music vu
 ```
 
 ## Project Status
 
 - Faz 0-3: Complete (lib + CLI + protocol + hardware testing)
-- Faz 4: Sensor integration — CPU/GPU temp → per-key color (not started)
-- Faz 5: GTK4 GUI (not started)
+- Faz 3.5: Software effects + music-reactive lighting (complete)
+  - 10 software effects: fire, matrix, plasma, heatmap, radar, lightning, explode, ripple, typewriter, life
+  - 5 music visualizers: spectrum, beat, energy, VU, freqmap
+  - Producer-consumer threading (audio + animation threads)
+  - PulseAudio/PipeWire capture, KissFFT spectrum analysis, beat detection
+- Faz 4: Sensor integration — extended heatmap (CPU/GPU already in SW effects)
+- Faz 5: GTK4 GUI (not started — will be primary user interface)
 - Faz 6: Daemon mode, profiles, wireless support (not started)
 
 ## Known Limitations (Firmware)
@@ -135,7 +161,7 @@ on the wrong row. Consider normalizing positions if exact physical layout is nee
 ## Conventions
 
 - C11, CMake >= 3.16
-- Error codes: negative integers (F87_OK=0, F87_ERR_*=-1..-6)
+- Error codes: negative integers (F87_OK=0, F87_ERR_*=-1..-8)
 - Public API in `lib/include/f87/`, internal in `lib/src/`
 - LED indices: non-sequential, mapped via `f87_led_index[]` array from KB.ini
 - Per-effect parameters at config offset 64 + 2 × effect_id
