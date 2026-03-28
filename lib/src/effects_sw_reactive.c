@@ -51,12 +51,18 @@ static void explode_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     (void)audio;
     explode_data_t *ed = ctx->effect_data;
     float br_scale = (float)ctx->brightness / 4.0f;
-    float expand = 0.4f + (float)ctx->speed * 0.2f;
+    float expand = 0.3f;
+    /* speed controls max spread radius: 0=2 keys, 1=3, 2=5, 3=7, 4=10 */
+    float max_radius = 2.0f + (float)ctx->speed * 2.0f;
 
     for (int e = 0; e < EXPLODE_MAX; e++) {
         if (ed->explosions[e].strength <= 0) continue;
         ed->explosions[e].radius += expand;
-        ed->explosions[e].strength *= 0.9f;
+        /* Stop expanding and fade faster when max radius reached */
+        if (ed->explosions[e].radius > max_radius)
+            ed->explosions[e].strength *= 0.8f;
+        else
+            ed->explosions[e].strength *= 0.92f;
         if (ed->explosions[e].strength < 0.01f)
             ed->explosions[e].strength = 0;
     }
@@ -71,6 +77,8 @@ static void explode_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
             float dx = (float)(f87_key_layout[k].col - f87_key_layout[src].col);
             float dy = (float)(f87_key_layout[k].row - f87_key_layout[src].row) * 2.0f;
             float dist = sqrtf(dx * dx + dy * dy);
+            /* Skip keys beyond max radius */
+            if (dist > max_radius) continue;
             float ring_dist = fabsf(dist - ed->explosions[e].radius);
             if (ring_dist < 1.5f) {
                 float v = (1.0f - ring_dist / 1.5f) * ed->explosions[e].strength;

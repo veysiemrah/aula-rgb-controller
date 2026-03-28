@@ -24,57 +24,95 @@ uint32_t f87_effect_rand(uint32_t *seed)
     return (*seed >> 16) & 0x7FFF;
 }
 
-/* Find keyboard input device for reactive effects */
+/* Find keyboard input device for reactive effects.
+ * Prefers "BY Tech Gaming Keyboard" (AULA), falls back to any keyboard with KEY_A. */
 static int find_keyboard_input(void)
 {
     char path[64];
+    char name[256];
+    int fallback_fd = -1;
+
     for (int i = 0; i < 32; i++) {
         snprintf(path, sizeof(path), "/dev/input/event%d", i);
         int fd = open(path, O_RDONLY | O_NONBLOCK);
         if (fd < 0) continue;
 
+        /* Check if it has KEY_A capability */
         unsigned long evbits = 0;
-        if (ioctl(fd, EVIOCGBIT(0, sizeof(evbits)), &evbits) >= 0) {
-            if (evbits & (1UL << EV_KEY)) {
-                unsigned long keybits[(KEY_MAX + 8 * sizeof(unsigned long) - 1) /
-                                      (8 * sizeof(unsigned long))] = {0};
-                if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybits)), keybits) >= 0) {
-                    /* Check for KEY_A to confirm it's a real keyboard */
-                    if (keybits[KEY_A / (8 * sizeof(unsigned long))] &
-                        (1UL << (KEY_A % (8 * sizeof(unsigned long))))) {
-                        return fd;
-                    }
-                }
-            }
+        if (ioctl(fd, EVIOCGBIT(0, sizeof(evbits)), &evbits) < 0 ||
+            !(evbits & (1UL << EV_KEY))) {
+            close(fd);
+            continue;
         }
-        close(fd);
+
+        unsigned long keybits[(KEY_MAX + 8 * sizeof(unsigned long) - 1) /
+                              (8 * sizeof(unsigned long))] = {0};
+        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybits)), keybits) < 0) {
+            close(fd);
+            continue;
+        }
+
+        if (!(keybits[KEY_A / (8 * sizeof(unsigned long))] &
+              (1UL << (KEY_A % (8 * sizeof(unsigned long)))))) {
+            close(fd);
+            continue;
+        }
+
+        /* Get device name — prefer AULA/BY Tech keyboard */
+        name[0] = '\0';
+        ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+
+        if (strstr(name, "BY Tech Gaming Keyboard") && !strstr(name, "Consumer") &&
+            !strstr(name, "System") && !strstr(name, "Mouse")) {
+            /* Found the exact AULA keyboard input */
+            if (fallback_fd >= 0) close(fallback_fd);
+            return fd;
+        }
+
+        /* Keep first keyboard as fallback */
+        if (fallback_fd < 0)
+            fallback_fd = fd;
+        else
+            close(fd);
     }
-    return -1;
+
+    return fallback_fd;
 }
 
-/* Map Linux keycode to F87 key_id (-1 if not found) */
+/* Map Linux keycode to F87 key_id (-1 if not found).
+ * key_id values match f87_key_layout[] indices in protocol.c. */
 static int keycode_to_key_id(int keycode)
 {
     static const struct { int keycode; int key_id; } map[] = {
+        /* Row 0: Function row */
         {KEY_ESC, 0}, {KEY_F1, 1}, {KEY_F2, 2}, {KEY_F3, 3}, {KEY_F4, 4},
         {KEY_F5, 5}, {KEY_F6, 6}, {KEY_F7, 7}, {KEY_F8, 8}, {KEY_F9, 9},
         {KEY_F10, 10}, {KEY_F11, 11}, {KEY_F12, 12},
-        {KEY_GRAVE, 15}, {KEY_1, 16}, {KEY_2, 17}, {KEY_3, 18}, {KEY_4, 19},
-        {KEY_5, 20}, {KEY_6, 21}, {KEY_7, 22}, {KEY_8, 23}, {KEY_9, 24},
-        {KEY_0, 25}, {KEY_MINUS, 26}, {KEY_EQUAL, 27}, {KEY_BACKSPACE, 28},
+        /* Row 1: Number row */
+        {KEY_GRAVE, 13}, {KEY_1, 14}, {KEY_2, 15}, {KEY_3, 16}, {KEY_4, 17},
+        {KEY_5, 18}, {KEY_6, 19}, {KEY_7, 20}, {KEY_8, 21}, {KEY_9, 22},
+        {KEY_0, 23}, {KEY_MINUS, 24}, {KEY_EQUAL, 25}, {KEY_BACKSPACE, 26},
+        {KEY_SYSRQ, 27}, {KEY_SCROLLLOCK, 28}, {KEY_PAUSE, 29},
+        /* Row 2: QWERTY row */
         {KEY_TAB, 30}, {KEY_Q, 31}, {KEY_W, 32}, {KEY_E, 33}, {KEY_R, 34},
         {KEY_T, 35}, {KEY_Y, 36}, {KEY_U, 37}, {KEY_I, 38}, {KEY_O, 39},
-        {KEY_P, 40}, {KEY_LEFTBRACE, 41}, {KEY_RIGHTBRACE, 42}, {KEY_BACKSLASH, 43},
-        {KEY_CAPSLOCK, 45}, {KEY_A, 46}, {KEY_S, 47}, {KEY_D, 48}, {KEY_F, 49},
-        {KEY_G, 50}, {KEY_H, 51}, {KEY_J, 52}, {KEY_K, 53}, {KEY_L, 54},
-        {KEY_SEMICOLON, 55}, {KEY_APOSTROPHE, 56}, {KEY_ENTER, 57},
-        {KEY_LEFTSHIFT, 58}, {KEY_Z, 59}, {KEY_X, 60}, {KEY_C, 61},
-        {KEY_V, 62}, {KEY_B, 63}, {KEY_N, 64}, {KEY_M, 65},
-        {KEY_COMMA, 66}, {KEY_DOT, 67}, {KEY_SLASH, 68}, {KEY_RIGHTSHIFT, 69},
-        {KEY_LEFTCTRL, 71}, {KEY_LEFTMETA, 72}, {KEY_LEFTALT, 73},
-        {KEY_SPACE, 74}, {KEY_RIGHTALT, 75},
-        {KEY_COMPOSE, 77}, {KEY_RIGHTCTRL, 78},
-        {KEY_UP, 82}, {KEY_LEFT, 84}, {KEY_DOWN, 85}, {KEY_RIGHT, 86},
+        {KEY_P, 40}, {KEY_LEFTBRACE, 41}, {KEY_RIGHTBRACE, 42}, {KEY_ENTER, 43},
+        {KEY_DELETE, 44}, {KEY_INSERT, 45}, {KEY_HOME, 46}, {KEY_PAGEUP, 47},
+        /* Row 3: Home row */
+        {KEY_CAPSLOCK, 48}, {KEY_A, 49}, {KEY_S, 50}, {KEY_D, 51}, {KEY_F, 52},
+        {KEY_G, 53}, {KEY_H, 54}, {KEY_J, 55}, {KEY_K, 56}, {KEY_L, 57},
+        {KEY_SEMICOLON, 58}, {KEY_APOSTROPHE, 59}, {KEY_BACKSLASH, 60},
+        {KEY_END, 61}, {KEY_PAGEDOWN, 62},
+        /* Row 4: Shift row */
+        {KEY_LEFTSHIFT, 63}, {KEY_Z, 64}, {KEY_X, 65}, {KEY_C, 66},
+        {KEY_V, 67}, {KEY_B, 68}, {KEY_N, 69}, {KEY_M, 70},
+        {KEY_COMMA, 71}, {KEY_DOT, 72}, {KEY_SLASH, 73}, {KEY_RIGHTSHIFT, 74},
+        {KEY_UP, 75},
+        /* Row 5: Bottom row */
+        {KEY_LEFTCTRL, 77}, {KEY_LEFTMETA, 78}, {KEY_LEFTALT, 79},
+        {KEY_SPACE, 80}, {KEY_RIGHTALT, 81},
+        {KEY_COMPOSE, 83}, {KEY_RIGHTCTRL, 76},
+        {KEY_LEFT, 84}, {KEY_DOWN, 85}, {KEY_RIGHT, 86},
         {-1, -1}
     };
 
@@ -89,13 +127,11 @@ static void *anim_thread_func(void *arg)
 {
     f87_anim_ctx_t *ctx = arg;
 
-    int rc = f87_direct_mode_enable(ctx->dev);
-    if (rc < 0) {
-        atomic_store(&ctx->error, rc);
-        atomic_store(&ctx->running, false);
-        return NULL;
-    }
+    f87_direct_mode_enable(ctx->dev);
+    /* Direct mode enable may report errors on F87 TK but still work.
+       We proceed regardless and check if frame sending works. */
 
+    int rc;
     f87_frame_t frame;
     f87_audio_data_t audio;
 
@@ -147,9 +183,17 @@ static void *anim_thread_func(void *arg)
 
         rc = f87_direct_send_frame(ctx->dev, colors, f87_led_index, F87_KEY_COUNT);
         if (rc < 0) {
-            atomic_store(&ctx->error, rc);
-            atomic_store(&ctx->running, false);
-            break;
+            /* USB transient errors: retry a few times before giving up */
+            int retries = 3;
+            while (rc < 0 && retries-- > 0) {
+                usleep(5000);
+                rc = f87_direct_send_frame(ctx->dev, colors, f87_led_index, F87_KEY_COUNT);
+            }
+            if (rc < 0) {
+                atomic_store(&ctx->error, F87_ERR_IO);
+                atomic_store(&ctx->running, false);
+                break;
+            }
         }
 
         /* Sleep to maintain target frame rate */
