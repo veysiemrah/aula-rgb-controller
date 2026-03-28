@@ -13,6 +13,12 @@ add_executable(test_device tests/test_device.c)
 target_link_libraries(test_device PRIVATE f87)
 add_test(NAME device_tests COMMAND test_device)
 
+find_package(Threads REQUIRED)
+add_executable(test_ring_buffer tests/test_ring_buffer.c lib/src/ring_buffer.c)
+target_include_directories(test_ring_buffer PRIVATE lib/src lib/include)
+target_link_libraries(test_ring_buffer Threads::Threads)
+add_test(NAME ring_buffer_tests COMMAND test_ring_buffer)
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 
