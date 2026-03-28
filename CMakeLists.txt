@@ -19,6 +19,16 @@ target_include_directories(test_ring_buffer PRIVATE lib/src lib/include)
 target_link_libraries(test_ring_buffer Threads::Threads)
 add_test(NAME ring_buffer_tests COMMAND test_ring_buffer)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PULSE libpulse-simple)
+if(PULSE_FOUND)
+    add_executable(test_spectrum tests/test_spectrum.c lib/src/spectrum.c)
+    target_include_directories(test_spectrum PRIVATE lib/src lib/include vendor/kissfft)
+    target_link_libraries(test_spectrum kissfft m)
+    target_compile_definitions(test_spectrum PRIVATE F87_HAS_AUDIO=1)
+    add_test(NAME spectrum_tests COMMAND test_spectrum)
+endif()
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 
