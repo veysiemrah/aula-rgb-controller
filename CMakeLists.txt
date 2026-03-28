@@ -16,6 +16,7 @@ add_test(NAME device_tests COMMAND test_device)
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 
+add_subdirectory(vendor/kissfft)
 add_subdirectory(lib)
 
 if(BUILD_CLI)
