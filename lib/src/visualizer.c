@@ -353,16 +353,37 @@ static void freqmap_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
             fd->smooth[b] *= 0.95f;
     }
 
+    /* Horizontal layout: left=bass, right=treble.
+     * Each band gets ~3-4 columns. Rows show intensity as height. */
+    int max_col = 21;
+    int max_row = 5;
+
     for (int k = 0; k < F87_KEY_COUNT; k++) {
+        int col = f87_key_layout[k].col;
         int row = f87_key_layout[k].row;
-        if (row >= F87_AUDIO_BANDS) continue;
 
-        int band = F87_AUDIO_BANDS - 1 - row;
-        float v = apply_gain(fd->smooth[band], &fd->peak[band], ctx->gain);
+        /* Map column to band (0-5) */
+        int band = (col * F87_AUDIO_BANDS) / (max_col + 1);
+        if (band >= F87_AUDIO_BANDS) band = F87_AUDIO_BANDS - 1;
 
-        frame->keys[k][0] = (uint8_t)((float)ctx->base_color[0] * v * br_scale);
-        frame->keys[k][1] = (uint8_t)((float)ctx->base_color[1] * v * br_scale);
-        frame->keys[k][2] = (uint8_t)((float)ctx->base_color[2] * v * br_scale);
+        float level = apply_gain(fd->smooth[band], &fd->peak[band], ctx->gain);
+
+        /* How many rows should light up from bottom */
+        int lit_rows = (int)(level * (float)(max_row + 1));
+        int row_from_bottom = max_row - row;
+
+        if (row_from_bottom < lit_rows) {
+            /* Color: warm (bass) to cool (treble) */
+            float t = (float)band / (float)(F87_AUDIO_BANDS - 1);
+            float r = (1.0f - t);
+            float g = (t < 0.5f) ? t * 2.0f : (1.0f - t) * 2.0f;
+            float b = t;
+
+            float intensity = 1.0f - (float)row_from_bottom / (float)(lit_rows + 1);
+            frame->keys[k][0] = (uint8_t)(r * intensity * 255.0f * br_scale);
+            frame->keys[k][1] = (uint8_t)(g * intensity * 255.0f * br_scale);
+            frame->keys[k][2] = (uint8_t)(b * intensity * 255.0f * br_scale);
+        }
     }
 }
 
