@@ -286,6 +286,8 @@ const char *f87_strerror(int error)
     case F87_ERR_CLAIM: return "Failed to claim interface";
     case F87_ERR_IO:    return "I/O error";
     case F87_ERR_NOMEM: return "Out of memory";
+    case -7:            return "Audio error";
+    case -8:            return "Animation error";
     default:            return "Unknown error";
     }
 }
