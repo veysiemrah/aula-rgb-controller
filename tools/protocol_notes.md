@@ -61,32 +61,190 @@ Byte 6: 0x06
 Bytes 7-519: 0x00
 ```
 
-Read feature report (GET_REPORT), 520 bytes response.
-Byte 13 of response = model ID:
-- 0x0B = Aula F87 Pro
+Read feature report (GET_REPORT). Response is **14 bytes** (not 520!).
 
-## Direct Per-Key RGB (Command 0x08)
+**Confirmed response (USB capture):**
+```
+06 82 01 00 01 00 06 00 03 00 00 00 03 66
+```
+- Bytes 0-6: echo of query
+- Byte 8: 0x03 (matches KB.ini Psd field byte 0)
+- Byte 12-13: 0x03 0x66 (matches KB.ini Psd "3,66")
+- Model identification: bytes 8+ differentiate models
 
-This is the main lighting control command. Sends RGB data for all LEDs
-in a single 520-byte feature report.
+**Note**: OpenRGB docs say byte 13 = 0x0B for F87 Pro, but actual capture
+shows 0x66. Our code should NOT reject based on model ID — just check
+that the query returns a valid response.
+
+Aula software sends model query **twice** on startup before any other commands.
+
+## Confirmed Protocol Flow (USB Capture 2026-03-28)
+
+Every lighting operation uses a **4-step sequence**:
+
+1. **SET_REPORT**: Send LED color data (cmd 0x06 or 0x0A)
+2. **SET_REPORT**: Send config query trigger (cmd 0x84, mostly zeros)
+3. **GET_REPORT**: Read current config (response: **136 bytes**, cmd 0x84)
+4. **SET_REPORT**: Write modified config back (cmd 0x04)
+
+### GET_REPORT Response Size
+Request asks for 520 bytes but device returns **136 bytes**. This is normal.
+
+## Command 0x06 — Per-Key Color (Single/Planar)
+
+Sets individual key colors using **planar RGB** layout (126 bytes per channel).
 
 ```
 Byte 0x00: 0x06  (report ID)
-Byte 0x01: 0x08  (command: set LEDs direct)
+Byte 0x01: 0x06  (command: per-key color)
 Byte 0x02: 0x00
 Byte 0x03: 0x00
 Byte 0x04: 0x01
 Byte 0x05: 0x00
-Byte 0x06: 0x7A  (122 decimal - LED count for buffer)
+Byte 0x06: 0x7A  (122 decimal - LED position count)
 Byte 0x07: 0x01
-Bytes 0x08+: RGB data, 3 bytes per LED (R, G, B)
-             LED index * 3 + 0x08 = offset for that LED's red byte
+Bytes 0x08-0x85:  R values for LED positions 0-121 (126 bytes, 4 padding)
+Bytes 0x86-0x103: G values for LED positions 0-121 (126 bytes, 4 padding)
+Bytes 0x104-0x181: B values for LED positions 0-121 (126 bytes, 4 padding)
 ```
 
-Maximum LED index that fits: (520 - 8) / 3 = 170 LEDs
-Actual keyboard uses indices up to ~101 (87 keys, non-sequential addressing).
+**Confirmed**: W key (led_index=14) set to blue → R[14]=0, G[14]=0, B[14]=0xFF at offsets 22, 148, 274. ✓
 
-## Keepalive
+## Command 0x0A — Custom Color Profile
+
+Writes the stored custom color profile. Format: **7 LEDs × 3 bytes RGB = 21 bytes per group**.
+
+```
+Byte 0x00: 0x06  (report ID)
+Byte 0x01: 0x0A  (command: custom profile)
+Byte 0x02-0x05: 0x00
+Byte 0x06: 0x00
+Byte 0x07: 0x02
+Bytes 0x08-0x1C: 21 bytes padding (zeros)
+Bytes 0x1D+: LED groups (21 bytes each, 7 LEDs × RGB)
+  - 5 groups, 21-byte gap, 2 groups, 21-byte gap, 4 groups, 21-byte gap, 3 groups
+  - Total: 14 groups = 98 LED positions
+Bytes 0x202-0x203: Terminator 0x5A 0xA5
+```
+
+**KEY INSIGHT**: For effect_id=0x01 (static single color), the keyboard uses
+**LED[0]** (report bytes 29-31) as the color for ALL keys.
+
+| User Action | LED[0] RGB | effect_id |
+|-------------|-----------|-----------|
+| All red     | FF 00 00  | 0x01      |
+| All green   | 00 FF 00  | 0x01      |
+| All white   | FF FF FF  | 0x01      |
+
+## Command 0x84 — Config Read
+
+**Send** (SET_REPORT): 520 bytes, mostly zeros:
+```
+Byte 0: 0x06, Byte 1: 0x84, Byte 4: 0x01, Byte 6: 0x80
+```
+
+Then **GET_REPORT**: receives 136 bytes with current config.
+
+## Command 0x04 — Config Write
+
+Read-modify-write pattern: read via 0x84, modify fields, send back as 0x04.
+
+```
+Byte  0: 0x06 (report ID)
+Byte  1: 0x04 (command)
+Byte  4: 0x01
+Byte  6: 0x80
+Bytes 8+: config data (copy from 0x84 response, modify as needed)
+Byte 18: effect_id
+Byte 66: brightness (1-4)
+Bytes 68+: keyboard matrix descriptor (do not modify)
+```
+
+### Effect ID Map (byte 18 of config) — Confirmed via Hardware Scan
+
+**IDs 6, 9, 14 do not exist** in F87 TK firmware — keyboard skips them.
+
+| ID   | Hex  | Name              | Color? | Speed? | Notes                          |
+|------|------|-------------------|--------|--------|--------------------------------|
+| 0    | 0x00 | Off               | -      | -      | LEDs turned off                |
+| 1    | 0x01 | Static            | Yes    | No     | Color from 0x0A LED[0]         |
+| 2    | 0x02 | Breathing         | Yes    | Yes    | Always colorful/random mode    |
+| 3    | 0x03 | Wave / Rainbow    | No     | Yes    | Built-in rainbow               |
+| 4    | 0x04 | Spectrum          | Yes    | Yes    | Keypress spread outward        |
+| 5    | 0x05 | Rain              | Yes    | Yes    |                                |
+| 7    | 0x07 | Ripple            | Yes    | Yes    | Keypress spread                |
+| 8    | 0x08 | Starlight         | Yes    | Yes    | Random twinkle                 |
+| 10   | 0x0A | Snake             | Yes    | Yes    |                                |
+| 11   | 0x0B | Aurora            | Yes    | Yes    |                                |
+| 12   | 0x0C | Reactive          | Yes    | Yes    | Single pressed key lights up   |
+| 13   | 0x0D | Marquee           | Yes    | Yes    |                                |
+| 15   | 0x0F | Circle            | No     | Yes    |                                |
+| 16   | 0x10 | Rain Down         | No     | Yes    | Top-to-bottom wave             |
+| 17   | 0x11 | Center Ripple     | No     | Yes    | Center spread outward          |
+| 18   | 0x12 | Custom static     | Per-key| No     | Uses 0x06 data, byte 17=1      |
+
+### Config Response Structure (136 bytes)
+```
+Bytes  0-7:   Header (06 84 00 00 01 00 80 00)
+Bytes  8-15:  Mode config (00 03 03 01 00 00 04 04)
+Byte  16:     0x07 (mode count?)
+Byte  17:     Custom mode flag (0=hw effect, 1=custom per-key) ← KEY FIELD
+Byte  18:     Effect ID ← KEY FIELD
+Byte  19:     0x20 (32)
+Bytes 20-25:  Parameters (reserved)
+Byte  26:     Side light effect ID ← KEY FIELD
+              (0=off, 1=rainbow, 2=breath mix, 3=static red, 4=breath red)
+Bytes 27-35:  Parameters (reserved)
+Byte  36:     Battery light effect ID ← KEY FIELD
+              (same values as side light; 0=off shows battery indicator)
+Bytes 37-63:  Parameters (reserved)
+Bytes 64-65:  0xFF 0xFF (separator)
+Bytes 66-133: Per-effect parameters (2 bytes per effect) ← KEY FIELDS
+              Formula: offset = 64 + 2 × effect_id
+              Byte 0: brightness (1=min, 4=max)
+              Byte 1: (speed << 4) | flags
+                      speed = upper nibble (0=slowest, 4=fastest)
+                      flags = lower nibble (typically 0x7)
+              Example: effect_id=3 (Wave) → offset 70-71
+Bytes 134-135: 0x5A 0xA5 terminator
+```
+
+## Command 0x08 — Direct Mode (OpenRGB, UNCONFIRMED)
+
+From OpenRGB SinowealthKeyboard10c analysis. NOT observed in Aula software captures.
+May work for real-time temporary control (reverts after ~1s keepalive timeout).
+
+```
+Byte 0x00: 0x06  (report ID)
+Byte 0x01: 0x08  (command: set LEDs direct)
+Byte 0x04: 0x01
+Byte 0x06: 0x7A  (122)
+Byte 0x07: 0x01
+Bytes 0x08+: RGB data, 3 bytes per LED (interleaved, NOT planar)
+```
+
+## Effect Speed/Brightness — Two Methods
+
+### Method 1: Config bytes (CONFIRMED, IMPLEMENTED)
+
+Each effect stores its own brightness and speed in the config at offset `64 + 2 × effect_id`:
+- Byte 0: brightness (1-4)
+- Byte 1: (speed << 4) | flags
+
+This is set via the standard config write (cmd 0x04) and works for all effects.
+
+### Method 2: Report IDs 0x35-0x39 (Separate Protocol, NOT IMPLEMENTED)
+
+The Windows software also uses separate HID report IDs for speed/brightness:
+- **0x39**: Speed/brightness set (short, ~6-9 bytes)
+- **0x35**: Checksum/verification
+- **0x36**: Device configuration
+- **0x37**: Firmware/data block
+
+These may control additional parameters (e.g., single-color vs colorful mode for Breathing).
+Not yet decoded. Method 1 is sufficient for basic brightness/speed control.
+
+## Keepalive (for direct mode 0x08 only)
 
 The keyboard reverts to its stored hardware effect after approximately
 1 second without receiving a direct LED update. Applications using direct
@@ -103,8 +261,8 @@ mode must send updates at least every 500ms to maintain control.
 ## LED Effects (Hardware, stored in keyboard flash)
 
 19 effects total. Extracted from KB.ini LedOpt entries.
-**Note: the command to select hardware effects is NOT yet known.**
-Only direct per-key RGB (command 0x08) is implemented.
+**Effect selection uses config byte 18 = UI Index (NOT HW ID!).**
+Confirmed: UI_Index 1=Static, 2=Breathing/Respire, 3=Wave/Rainbow, 21(0x15)=Custom.
 
 Format: `LedOpt<n> = ui_index, hw_id, has_speed, has_brightness, has_direction, has_random, has_color`
 
@@ -238,7 +396,10 @@ the internal LED driver addressing. The mapping was extracted from KB.ini K entr
 
 ## Capture Log
 
-| Date       | File | Action                | Notes                                      |
-|------------|------|-----------------------|--------------------------------------------|
-| 2026-03-27 | --   | KB.ini analysis       | Extracted VID/PID, LED map, effects from RE |
-| 2026-03-27 | --   | OpenRGB RE findings   | HID feature reports, 520-byte packets, model query, direct LED command |
+| Date       | File          | Action                | Notes                                      |
+|------------|---------------|-----------------------|--------------------------------------------|
+| 2026-03-27 | --            | KB.ini analysis       | Extracted VID/PID, LED map, effects from RE |
+| 2026-03-27 | --            | OpenRGB RE findings   | HID feature reports, 520-byte packets, model query, direct LED command |
+| 2026-03-28 | capture.pcap  | USB capture #1        | W=blue, all=red, brightness, rainbow — decoded 4-step protocol |
+| 2026-03-28 | capture2.pcap | USB capture #2        | all=green, all=white, LED off — confirmed effect_id + LED[0] color mapping |
+| 2026-03-28 | capture3.pcap | USB capture #3        | Handshake (model query 0x82), Breathing/speed — discovered report 0x35-0x39 |

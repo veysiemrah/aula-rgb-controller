@@ -1,6 +1,10 @@
 #include "protocol.h"
 #include <libusb-1.0/libusb.h>
 #include <string.h>
+#include <unistd.h>  /* usleep */
+
+/* Small delay between USB transfers to let the device process */
+#define F87_CMD_DELAY_US  5000  /* 5ms */
 
 void f87_pkt_init(f87_packet *pkt)
 {
@@ -26,35 +30,206 @@ void f87_pkt_build_query_model(f87_packet *pkt)
 }
 
 /*
- * Build a direct per-key LED update feature report.
+ * Build a planar per-key LED feature report (cmd 0x06).
  *
- * Layout (520 bytes):
+ * Layout (520 bytes, planar RGB — NOT interleaved):
  *   Byte 0x00: 0x06  (report ID)
- *   Byte 0x01: 0x08  (command: set LEDs direct)
+ *   Byte 0x01: 0x06  (command: per-key planar RGB)
  *   Byte 0x04: 0x01
- *   Byte 0x06: 0x7A  (122 — LED count for buffer)
+ *   Byte 0x06: 0x7A  (122 — LED count)
  *   Byte 0x07: 0x01
- *   Bytes 0x08+: RGB data, 3 bytes per LED
- *                led_index * 3 + 0x08 = offset for that LED's red byte
- *
- * Parameters:
- *   colors      — array of f87_color, one per key
- *   led_indices — hardware LED index for each key (from f87_led_index[])
- *   num_keys    — number of entries in colors/led_indices
+ *   Bytes   8-133:  R channel (126 bytes: 122 LEDs + 4 padding)
+ *   Bytes 134-259:  G channel (126 bytes)
+ *   Bytes 260-385:  B channel (126 bytes)
  */
+void f87_pkt_build_led_planar(f87_packet *pkt, const f87_color *colors,
+                               const uint8_t *led_indices, int num_keys)
+{
+    f87_pkt_init(pkt);
+    pkt->data[0] = F87_REPORT_ID;
+    pkt->data[1] = F87_CMD_LED_PLANAR;  /* 0x06 */
+    pkt->data[4] = 0x01;
+    pkt->data[6] = F87_LED_BUFFER_KEYS; /* 0x7A */
+    pkt->data[7] = 0x01;
+
+    for (int i = 0; i < num_keys; i++) {
+        uint8_t idx = led_indices[i];
+        if (idx >= F87_LED_BUFFER_KEYS)
+            continue;
+        pkt->data[F87_PLANE_R + idx] = colors[i].r;
+        pkt->data[F87_PLANE_G + idx] = colors[i].g;
+        pkt->data[F87_PLANE_B + idx] = colors[i].b;
+    }
+}
+
+/*
+ * Build a custom color profile packet (cmd 0x0A).
+ *
+ * For static single-color mode (effect_id=0x01), the keyboard uses
+ * LED[0] (bytes 29-31) as the color for ALL keys.
+ */
+void f87_pkt_build_led_custom(f87_packet *pkt, f87_color color)
+{
+    f87_pkt_init(pkt);
+    pkt->data[0] = F87_REPORT_ID;
+    pkt->data[1] = F87_CMD_LED_CUSTOM;  /* 0x0A */
+    pkt->data[7] = 0x02;
+
+    /* LED[0] = the static color for all keys */
+    pkt->data[F87_CUSTOM_LED0_OFFSET]     = color.r;
+    pkt->data[F87_CUSTOM_LED0_OFFSET + 1] = color.g;
+    pkt->data[F87_CUSTOM_LED0_OFFSET + 2] = color.b;
+
+    /* Terminator */
+    pkt->data[F87_CUSTOM_TERMINATOR_OFFSET]     = 0x5A;
+    pkt->data[F87_CUSTOM_TERMINATOR_OFFSET + 1] = 0xA5;
+}
+
+/*
+ * Build a config read trigger packet (cmd 0x84).
+ * After sending this, do a GET_REPORT to receive the 136-byte config.
+ */
+void f87_pkt_build_config_read(f87_packet *pkt)
+{
+    f87_pkt_init(pkt);
+    pkt->data[0] = F87_REPORT_ID;
+    pkt->data[1] = F87_CMD_CONFIG_READ;  /* 0x84 */
+    pkt->data[4] = 0x01;
+    pkt->data[6] = 0x80;
+}
+
+/*
+ * Build a config write packet (cmd 0x04).
+ * Copies the cached config data and modifies effect_id and brightness.
+ * Bytes 68-133 (keyboard matrix) are preserved from the read.
+ */
+void f87_pkt_build_config_write(f87_packet *pkt, const uint8_t *config,
+                                 int config_len, uint8_t effect_id,
+                                 uint8_t brightness, uint8_t speed)
+{
+    f87_pkt_init(pkt);
+    pkt->data[0] = F87_REPORT_ID;
+    pkt->data[1] = F87_CMD_CONFIG_WRITE; /* 0x04 */
+    pkt->data[4] = 0x01;
+    pkt->data[6] = 0x80;
+
+    /* Copy config data starting at byte 8 */
+    int copy_len = config_len - 8;
+    if (copy_len > 0 && copy_len <= F87_REPORT_SIZE - 8)
+        memcpy(&pkt->data[8], &config[8], (size_t)copy_len);
+
+    /* Set effect mode */
+    pkt->data[F87_CFG_CUSTOM_FLAG] = (effect_id == F87_MODE_CUSTOM) ? 0x01 : 0x00;
+    pkt->data[F87_CFG_EFFECT_ID]   = effect_id;
+
+    /* Set per-effect brightness and speed at offset 64 + 2*effect_id */
+    if (effect_id > 0 && effect_id <= 18) {
+        int param_off = F87_CFG_EFFECT_PARAM(effect_id);
+        if (param_off + 1 < F87_CONFIG_RESP_SIZE) {
+            pkt->data[param_off] = brightness;
+            if (speed != 0xFF) {
+                /* Preserve lower nibble (flags), set upper nibble (speed) */
+                uint8_t flags = pkt->data[param_off + 1] & 0x0F;
+                pkt->data[param_off + 1] = (speed << 4) | flags;
+            }
+        }
+    }
+}
+
+/*
+ * Read device config via the 4-step protocol (steps 2-3).
+ * Sends 0x84 trigger, then GET_REPORT to read 136-byte config.
+ * Result is cached in dev->config[].
+ */
+int f87_config_read(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+
+    /* Step 2: Send config read trigger */
+    f87_packet pkt;
+    f87_pkt_build_config_read(&pkt);
+    int rc = f87_pkt_send(dev, &pkt);
+    if (rc < 0)
+        return rc;
+
+    usleep(F87_CMD_DELAY_US);
+
+    /* Step 3: Read config response */
+    f87_packet resp;
+    rc = f87_pkt_recv(dev, &resp, F87_TIMEOUT_MS);
+    if (rc < 0)
+        return rc;
+
+    /* Cache the response (typically 136 bytes) */
+    int len = rc;
+    if (len > F87_CONFIG_RESP_SIZE)
+        len = F87_CONFIG_RESP_SIZE;
+    memcpy(dev->config, resp.data, (size_t)len);
+    dev->config_valid = 1;
+
+    return 0;
+}
+
+/*
+ * Write device config (step 4 of the protocol).
+ * Reads config first if not cached, then writes modified version.
+ */
+int f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
+                     uint8_t speed)
+{
+    if (!dev)
+        return -1;
+
+    /* Read config if we don't have a cached copy */
+    if (!dev->config_valid) {
+        int rc = f87_config_read(dev);
+        if (rc < 0)
+            return rc;
+    }
+
+    /* Clamp brightness to hardware range */
+    if (brightness < F87_BRIGHTNESS_MIN)
+        brightness = F87_BRIGHTNESS_MIN;
+    if (brightness > F87_BRIGHTNESS_MAX)
+        brightness = F87_BRIGHTNESS_MAX;
+
+    /* Clamp speed if specified */
+    if (speed != 0xFF && speed > F87_SPEED_MAX)
+        speed = F87_SPEED_MAX;
+
+    /* Step 4: Write modified config */
+    f87_packet pkt;
+    f87_pkt_build_config_write(&pkt, dev->config, F87_CONFIG_RESP_SIZE,
+                                effect_id, brightness, speed);
+    usleep(F87_CMD_DELAY_US);
+    int rc = f87_pkt_send(dev, &pkt);
+    if (rc < 0)
+        return rc;
+
+    /* Update cache */
+    dev->config[F87_CFG_EFFECT_ID] = effect_id;
+    if (effect_id > 0 && effect_id <= 18) {
+        int off = F87_CFG_EFFECT_PARAM(effect_id);
+        dev->config[off] = brightness;
+    }
+
+    return 0;
+}
+
+/* Legacy direct mode (cmd 0x08, OpenRGB compat, unconfirmed on F87 TK) */
 void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
                                 const uint8_t *led_indices, int num_keys)
 {
     f87_pkt_init(pkt);
-    pkt->data[0] = F87_REPORT_ID;       /* 0x06 */
+    pkt->data[0] = F87_REPORT_ID;
     pkt->data[1] = F87_CMD_SET_LEDS;    /* 0x08 */
     pkt->data[4] = 0x01;
-    pkt->data[6] = F87_LED_BUFFER_KEYS; /* 0x7A = 122 */
+    pkt->data[6] = F87_LED_BUFFER_KEYS;
     pkt->data[7] = 0x01;
 
     for (int i = 0; i < num_keys; i++) {
         int offset = F87_LED_DATA_OFFSET + led_indices[i] * 3;
-        /* Guard against buffer overflow (122 LEDs * 3 = 366 + 8 = 374 < 520) */
         if (offset + 2 >= F87_REPORT_SIZE)
             continue;
         pkt->data[offset]     = colors[i].r;
@@ -163,9 +338,9 @@ const f87_key_info f87_key_layout[F87_KEY_COUNT] = {
     { 24, "MINUS",  1, 11 },   /* K25 */
     { 25, "EQUAL",  1, 12 },   /* K26 */
     { 26, "BKSP",   1, 13 },   /* K27 */
-    { 27, "PRTSC",  1, 14 },   /* K28 */
-    { 28, "SCRLK",  1, 15 },   /* K29 */
-    { 29, "PAUSE",  1, 16 },   /* K30 */
+    { 27, "PRTSC",  0, 14 },   /* K28 — physically row 0 (F key row) */
+    { 28, "SCRLK",  0, 15 },   /* K29 — physically row 0 */
+    { 29, "PAUSE",  0, 16 },   /* K30 — physically row 0 */
 
     /* Row 2: QWERTY row */
     { 30, "TAB",    2,  0 },   /* K31 */
@@ -183,9 +358,9 @@ const f87_key_info f87_key_layout[F87_KEY_COUNT] = {
     { 42, "RBRKT",  2, 12 },   /* K43 */
     { 43, "ENTER",  2, 13 },   /* K44 */
     { 44, "DEL",    2, 14 },   /* K45 */
-    { 45, "INS",    2, 15 },   /* K46 */
-    { 46, "HOME",   2, 16 },   /* K47 */
-    { 47, "PGUP",   2, 17 },   /* K48 */
+    { 45, "INS",    1, 14 },   /* K46 — physically row 1 (number row) */
+    { 46, "HOME",   1, 15 },   /* K47 — physically row 1 */
+    { 47, "PGUP",   1, 16 },   /* K48 — physically row 1 */
 
     /* Row 3: Home row */
     { 48, "CAPS",   3,  0 },   /* K49 */
@@ -201,8 +376,8 @@ const f87_key_info f87_key_layout[F87_KEY_COUNT] = {
     { 58, "SEMI",   3, 10 },   /* K59 */
     { 59, "QUOTE",  3, 11 },   /* K60 */
     { 60, "BSLSH",  3, 12 },   /* K61 */
-    { 61, "END",    3, 13 },   /* K62 */
-    { 62, "PGDN",   3, 14 },   /* K63 */
+    { 61, "END",    2, 15 },   /* K62 — physically row 2 (QWERTY row) */
+    { 62, "PGDN",   2, 16 },   /* K63 — physically row 2 */
 
     /* Row 4: Shift row */
     { 63, "LSHFT",  4,  0 },   /* K64 */
@@ -217,8 +392,8 @@ const f87_key_info f87_key_layout[F87_KEY_COUNT] = {
     { 72, "DOT",    4,  9 },   /* K73 */
     { 73, "SLASH",  4, 10 },   /* K74 */
     { 74, "RSHFT",  4, 11 },   /* K75 */
-    { 75, "UP",     4, 12 },   /* K76 */
-    { 76, "RCTRL",  4, 13 },   /* K77 */
+    { 75, "UP",     4, 14 },   /* K76 */
+    { 76, "RCTRL",  5, 14 },   /* K77 — physically row 5 (bottom row) */
 
     /* Row 5: Bottom row */
     { 77, "LCTRL",  5,  0 },   /* K78 */
@@ -228,9 +403,9 @@ const f87_key_info f87_key_layout[F87_KEY_COUNT] = {
     { 81, "RALT",   5,  4 },   /* K82 */
     { 82, "FN",     5,  5 },   /* K83 */
     { 83, "MENU",   5,  6 },   /* K84 */
-    { 84, "LEFT",   5,  7 },   /* K85 */
-    { 85, "DOWN",   5,  8 },   /* K86 */
-    { 86, "RIGHT",  5,  9 },   /* K87 */
+    { 84, "LEFT",   5, 13 },   /* K85 */
+    { 85, "DOWN",   5, 14 },   /* K86 */
+    { 86, "RIGHT",  5, 15 },   /* K87 */
 
     /* ISO extra key (between LSHIFT and Z) */
     { 87, "ISO",    4, 14 },   /* K88 */

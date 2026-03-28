@@ -50,8 +50,10 @@ static int test_mode_names(void)
 {
     printf("test_mode_names... ");
     assert(f87_mode_name(F87_MODE_OFF) != NULL);
-    assert(f87_mode_name(F87_MODE_DIRECT) != NULL);
-    assert(f87_mode_name(F87_MODE_COUNT) != NULL);
+    assert(f87_mode_name(F87_MODE_STATIC) != NULL);
+    assert(f87_mode_name(F87_MODE_BREATHING) != NULL);
+    assert(f87_mode_name(F87_MODE_MARQUEE) != NULL);
+    assert(f87_mode_name(F87_MODE_CUSTOM) != NULL);
     printf("PASS\n");
     return 0;
 }

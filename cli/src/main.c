@@ -15,10 +15,12 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #endif
+
 
 /* ---------------------------------------------------------------------------
  * Helpers
@@ -32,20 +34,21 @@ static void usage(const char *progname)
         "Commands:\n"
         "  list                              List connected devices\n"
         "  info                              Device information\n"
-        "  brightness <0-100>                Set brightness (scales all keys)\n"
+        "  brightness <1-4>                  Set brightness (1=min, 4=max)\n"
         "  off                               Turn off lighting\n"
-        "  color <RRGGBB>                    Set all keys to colour\n"
+        "  color <RRGGBB>                    Set all keys to colour (static)\n"
+        "  effect <name> [RRGGBB]            Set hardware effect\n"
         "  key set <KEY> <RRGGBB>            Set single key colour\n"
         "  key set-all <RRGGBB>              Set all keys to colour\n"
         "  raw send \"XX XX XX ...\"            Send raw HID feature report\n"
         "  raw listen                        Read HID feature report\n"
+        "\n"
+        "Effects: off, static, breathing, wave, spectrum, rain, ripple,\n"
+        "         starlight, snake, aurora, reactive, marquee, circle,\n"
+        "         raindown, center, custom\n"
         "\n", progname);
 }
 
-/**
- * Parse a hex colour string "RRGGBB" into an f87_color.
- * Returns 0 on success, -1 on failure.
- */
 static int parse_color(const char *str, f87_color *out)
 {
     if (!str || strlen(str) != 6)
@@ -66,11 +69,6 @@ static int parse_color(const char *str, f87_color *out)
     return 0;
 }
 
-/**
- * Open the first available F87 device.
- * Caller must call f87_close() on the returned device.
- * Returns NULL on failure (prints error to stderr).
- */
 static f87_device *open_first_device(f87_ctx *ctx,
                                      f87_device_info **out_list,
                                      int *out_count)
@@ -166,6 +164,15 @@ static int cmd_info(f87_ctx *ctx)
     printf("  Address:      %d\n", info->address);
     printf("  Protocol:     HID Feature Reports (%d bytes)\n", F87_REPORT_SIZE);
 
+    /* Read current effect and brightness */
+    f87_effect cur_effect;
+    if (f87_get_current_effect(dev, &cur_effect) == 0) {
+        printf("  Effect:       %s (id=%d)\n",
+               f87_mode_name(cur_effect.mode), cur_effect.mode);
+        printf("  Brightness:   %d/4\n", cur_effect.brightness);
+        printf("  Speed:        %d/4\n", cur_effect.speed);
+    }
+
     f87_close(dev);
     f87_free_device_list(list);
     return 0;
@@ -174,13 +181,13 @@ static int cmd_info(f87_ctx *ctx)
 static int cmd_brightness(f87_ctx *ctx, int argc, char **argv)
 {
     if (argc < 1) {
-        fprintf(stderr, "Usage: f87ctl brightness <0-100>\n");
+        fprintf(stderr, "Usage: f87ctl brightness <1-4>\n");
         return 1;
     }
 
     int level = atoi(argv[0]);
-    if (level < 0 || level > 100) {
-        fprintf(stderr, "Brightness must be 0-100, got %d.\n", level);
+    if (level < 1 || level > 4) {
+        fprintf(stderr, "Brightness must be 1-4, got %d.\n", level);
         return 1;
     }
 
@@ -198,7 +205,7 @@ static int cmd_brightness(f87_ctx *ctx, int argc, char **argv)
         return 1;
     }
 
-    printf("Brightness set to %d%%.\n", level);
+    printf("Brightness set to %d/4.\n", level);
     f87_close(dev);
     f87_free_device_list(list);
     return 0;
@@ -260,6 +267,93 @@ static int cmd_color(f87_ctx *ctx, int argc, char **argv)
     return 0;
 }
 
+static int cmd_effect(f87_ctx *ctx, int argc, char **argv)
+{
+    if (argc < 1) {
+        fprintf(stderr, "Usage: f87ctl effect <name> [RRGGBB]\n");
+        return 1;
+    }
+
+    const char *name = argv[0];
+    f87_mode mode = F87_MODE_OFF;
+
+    struct { const char *name; f87_mode mode; } modes[] = {
+        {"off",       F87_MODE_OFF},
+        {"static",    F87_MODE_STATIC},
+        {"breathing", F87_MODE_BREATHING},
+        {"wave",      F87_MODE_WAVE},
+        {"spectrum",  F87_MODE_SPECTRUM},
+        {"rain",      F87_MODE_RAIN},
+        {"ripple",    F87_MODE_RIPPLE},
+        {"starlight", F87_MODE_STARLIGHT},
+        {"snake",     F87_MODE_SNAKE},
+        {"aurora",    F87_MODE_AURORA},
+        {"reactive",  F87_MODE_REACTIVE},
+        {"marquee",   F87_MODE_MARQUEE},
+        {"circle",    F87_MODE_CIRCLE},
+        {"raindown",  F87_MODE_RAINDOWN},
+        {"center",    F87_MODE_RIPPLE_CENTER},
+        {"custom",    F87_MODE_CUSTOM},
+        {NULL, 0}
+    };
+
+    int found = 0;
+    for (int i = 0; modes[i].name; i++) {
+        if (strcasecmp(name, modes[i].name) == 0) {
+            mode = modes[i].mode;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        fprintf(stderr, "Unknown effect '%s'.\n", name);
+        return 1;
+    }
+
+    f87_color color = F87_COLOR_RED;
+    uint8_t bright = F87_BRIGHTNESS_MAX;
+    uint8_t spd = 0xFF; /* don't change */
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--brightness") == 0 && i + 1 < argc) {
+            bright = (uint8_t)atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
+            spd = (uint8_t)atoi(argv[++i]);
+        } else if (argv[i][0] != '-') {
+            parse_color(argv[i], &color);
+        }
+    }
+
+    f87_device_info *list = NULL;
+    int count = 0;
+    f87_device *dev = open_first_device(ctx, &list, &count);
+    if (!dev)
+        return 1;
+
+    f87_effect effect = {0};
+    effect.mode = mode;
+    effect.brightness = bright;
+    effect.speed = spd;
+    effect.color1 = color;
+
+    int rc = f87_set_effect(dev, &effect);
+    if (rc < 0) {
+        fprintf(stderr, "Error setting effect: %s\n", f87_strerror(rc));
+        f87_close(dev);
+        f87_free_device_list(list);
+        return 1;
+    }
+
+    printf("Effect set to %s", f87_mode_name(mode));
+    if (mode != F87_MODE_OFF)
+        printf(" (#%02X%02X%02X)", color.r, color.g, color.b);
+    printf(".\n");
+
+    f87_close(dev);
+    f87_free_device_list(list);
+    return 0;
+}
+
 static int cmd_key(f87_ctx *ctx, int argc, char **argv)
 {
     if (argc < 1) {
@@ -288,15 +382,8 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         if (!dev)
             return 1;
 
-        int rc = f87_set_all_keys(dev, color);
-        if (rc < 0) {
-            fprintf(stderr, "Error setting all keys: %s\n", f87_strerror(rc));
-            f87_close(dev);
-            f87_free_device_list(list);
-            return 1;
-        }
-
-        rc = f87_apply(dev);
+        f87_set_all_keys(dev, color);
+        int rc = f87_apply(dev);
         if (rc < 0) {
             fprintf(stderr, "Error applying key colours: %s\n",
                     f87_strerror(rc));
@@ -329,7 +416,6 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         if (!dev)
             return 1;
 
-        /* Find key by name in layout */
         const f87_key_info *layout = f87_get_key_layout(dev);
         int key_count = f87_get_key_count(dev);
         int key_id = -1;
@@ -344,25 +430,16 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         if (key_id < 0) {
             fprintf(stderr, "Unknown key '%s'. Available keys:\n", key_name);
             for (int i = 0; i < key_count; i++) {
-                if (layout[i].name) {
+                if (layout[i].name)
                     fprintf(stderr, "  %s\n", layout[i].name);
-                }
             }
             f87_close(dev);
             f87_free_device_list(list);
             return 1;
         }
 
-        int rc = f87_set_key_color(dev, (uint8_t)key_id, color);
-        if (rc < 0) {
-            fprintf(stderr, "Error setting key colour: %s\n",
-                    f87_strerror(rc));
-            f87_close(dev);
-            f87_free_device_list(list);
-            return 1;
-        }
-
-        rc = f87_apply(dev);
+        f87_set_key_color(dev, (uint8_t)key_id, color);
+        int rc = f87_apply(dev);
         if (rc < 0) {
             fprintf(stderr, "Error applying key colours: %s\n",
                     f87_strerror(rc));
@@ -378,21 +455,13 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         return 0;
 
     } else {
-        fprintf(stderr, "Unknown key subcommand '%s'.\n"
-                        "Usage: f87ctl key set <KEY> <RRGGBB>\n"
-                        "       f87ctl key set-all <RRGGBB>\n", subcmd);
+        fprintf(stderr, "Unknown key subcommand '%s'.\n", subcmd);
         return 1;
     }
 }
 
-/**
- * Print a hex dump of a packet buffer.
- * Only prints up to the first `len` bytes, but shows trailing
- * non-zero bytes if any.
- */
 static void print_hex_dump(const uint8_t *data, int len)
 {
-    /* Find last non-zero byte to avoid dumping 500+ zeros */
     int last_nonzero = 0;
     for (int i = 0; i < len; i++) {
         if (data[i] != 0)
@@ -400,7 +469,7 @@ static void print_hex_dump(const uint8_t *data, int len)
     }
     int print_len = last_nonzero + 1;
     if (print_len < 16)
-        print_len = 16; /* always show at least 16 bytes */
+        print_len = 16;
     if (print_len > len)
         print_len = len;
 
@@ -421,7 +490,6 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
         return 1;
     }
 
-    /* Join all remaining args into one string */
     char buf[2048] = {0};
     for (int i = 0; i < argc; i++) {
         if (i > 0)
@@ -429,7 +497,6 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
         strncat(buf, argv[i], sizeof(buf) - strlen(buf) - 1);
     }
 
-    /* Parse space-separated hex bytes */
     f87_packet pkt;
     f87_pkt_init(&pkt);
 
@@ -469,7 +536,6 @@ static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
     }
     printf("Sent (%d bytes transferred).\n", rc);
 
-    /* Try to read a response */
     f87_packet resp;
     rc = f87_pkt_recv(dev, &resp, F87_TIMEOUT_MS);
     if (rc < 0) {
@@ -509,7 +575,7 @@ static int cmd_raw_listen(f87_ctx *ctx)
 }
 
 /* ---------------------------------------------------------------------------
- * Main -- argument dispatch
+ * Main
  * ---------------------------------------------------------------------------*/
 
 int main(int argc, char **argv)
@@ -521,7 +587,6 @@ int main(int argc, char **argv)
 
     const char *cmd = argv[1];
 
-    /* Handle --help / -h / --version early */
     if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage(argv[0]);
         return 0;
@@ -553,6 +618,9 @@ int main(int argc, char **argv)
 
     } else if (strcmp(cmd, "color") == 0 || strcmp(cmd, "colour") == 0) {
         ret = cmd_color(ctx, argc - 2, argv + 2);
+
+    } else if (strcmp(cmd, "effect") == 0) {
+        ret = cmd_effect(ctx, argc - 2, argv + 2);
 
     } else if (strcmp(cmd, "key") == 0) {
         ret = cmd_key(ctx, argc - 2, argv + 2);

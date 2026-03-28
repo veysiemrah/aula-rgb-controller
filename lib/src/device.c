@@ -217,6 +217,7 @@ f87_device *f87_open(f87_ctx *ctx, const f87_device_info *info)
     dev->info = *info;
     dev->iface_claimed = 1;
     dev->num_keys = F87_KEY_COUNT;
+    dev->config_valid = 0;
     snprintf(dev->firmware_ver, sizeof(dev->firmware_ver), "unknown");
 
     /*
