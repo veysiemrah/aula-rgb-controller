@@ -22,6 +22,7 @@ add_library(f87 SHARED
     src/ring_buffer.c
     src/effects_sw.c
     src/effects_sw_reactive.c
+    src/sensor.c
 )
 
 target_include_directories(f87
@@ -44,6 +45,15 @@ target_compile_options(f87
     PRIVATE
         ${LIBUSB_CFLAGS_OTHER}
 )
+
+# JSON config support (optional, for sensor profiles)
+pkg_check_modules(JSON_C json-c)
+if(JSON_C_FOUND)
+    target_sources(f87 PRIVATE src/sensor_config.c)
+    target_include_directories(f87 PRIVATE ${JSON_C_INCLUDE_DIRS})
+    target_link_libraries(f87 PRIVATE ${JSON_C_LIBRARIES})
+    target_compile_definitions(f87 PRIVATE F87_HAS_JSON=1)
+endif()
 
 if(BUILD_AUDIO AND PULSE_FOUND)
     target_sources(f87 PRIVATE src/audio.c src/spectrum.c src/visualizer.c)
