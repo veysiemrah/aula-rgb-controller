@@ -37,6 +37,7 @@ target_link_libraries(f87
     PRIVATE
         ${LIBUSB_LIBRARIES}
         Threads::Threads
+        m
 )
 
 target_compile_options(f87
