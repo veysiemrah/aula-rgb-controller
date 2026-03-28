@@ -6,6 +6,15 @@
 #include "f87/effects.h"
 #include <stdint.h>
 
+/* Error codes */
+#define F87_OK          0
+#define F87_ERR_INIT   -1
+#define F87_ERR_NOT_FOUND -2
+#define F87_ERR_OPEN   -3
+#define F87_ERR_CLAIM  -4
+#define F87_ERR_IO     -5
+#define F87_ERR_NOMEM  -6
+
 /* USB identifiers (confirmed via RE) */
 #define F87_VENDOR_ID           0x258A
 #define F87_PRODUCT_ID          0x010C
