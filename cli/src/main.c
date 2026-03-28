@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <signal.h>
 
 #ifdef _WIN32
 #define strcasecmp _stricmp
@@ -43,9 +44,17 @@ static void usage(const char *progname)
         "  raw send \"XX XX XX ...\"            Send raw HID feature report\n"
         "  raw listen                        Read HID feature report\n"
         "\n"
-        "Effects: off, static, breathing, wave, spectrum, rain, ripple,\n"
-        "         starlight, snake, aurora, reactive, marquee, circle,\n"
-        "         raindown, center, custom\n"
+        "  animate <effect> [RRGGBB] [opts]   Software animation (foreground)\n"
+        "  music <mode> [opts]               Music-reactive mode (foreground)\n"
+        "\n"
+        "HW Effects: off, static, breathing, wave, spectrum, rain, ripple,\n"
+        "            starlight, snake, aurora, reactive, marquee, circle,\n"
+        "            raindown, center, custom\n"
+        "\n"
+        "SW Effects: fire, matrix, plasma, heatmap, radar, lightning,\n"
+        "            explode, ripple-sw, typewriter, life\n"
+        "\n"
+        "Music modes: spectrum, beat, energy, vu, freqmap\n"
         "\n", progname);
 }
 
@@ -488,6 +497,218 @@ static void print_hex_dump(const uint8_t *data, int len)
     printf("\n");
 }
 
+/* ---------------------------------------------------------------------------
+ * Animation / Music commands
+ * ---------------------------------------------------------------------------*/
+
+static f87_anim_ctx_t *g_anim_ctx = NULL;
+static f87_device *g_anim_dev = NULL;
+static f87_device_info *g_anim_list = NULL;
+
+static void anim_signal_handler(int sig)
+{
+    (void)sig;
+    if (g_anim_ctx) {
+        f87_anim_stop(g_anim_ctx);
+        g_anim_ctx = NULL;
+    }
+    if (g_anim_dev) {
+        f87_close(g_anim_dev);
+        g_anim_dev = NULL;
+    }
+    if (g_anim_list) {
+        f87_free_device_list(g_anim_list);
+        g_anim_list = NULL;
+    }
+    _exit(0);
+}
+
+static int parse_sw_effect(const char *name)
+{
+    struct { const char *name; f87_sw_effect_id id; } map[] = {
+        {"fire",       F87_SW_FIRE},
+        {"matrix",     F87_SW_MATRIX},
+        {"plasma",     F87_SW_PLASMA},
+        {"heatmap",    F87_SW_HEATMAP},
+        {"radar",      F87_SW_RADAR},
+        {"lightning",  F87_SW_LIGHTNING},
+        {"explode",    F87_SW_EXPLODE},
+        {"ripple-sw",  F87_SW_RIPPLE},
+        {"typewriter", F87_SW_TYPEWRITER},
+        {"life",       F87_SW_LIFE},
+        {NULL, 0}
+    };
+    for (int i = 0; map[i].name; i++) {
+        if (strcmp(name, map[i].name) == 0)
+            return (int)map[i].id;
+    }
+    return -1;
+}
+
+static int parse_music_mode(const char *name)
+{
+    struct { const char *name; f87_sw_effect_id id; } map[] = {
+        {"spectrum",  F87_MU_SPECTRUM},
+        {"beat",      F87_MU_BEAT},
+        {"energy",    F87_MU_ENERGY},
+        {"vu",        F87_MU_VU},
+        {"freqmap",   F87_MU_FREQ_MAP},
+        {NULL, 0}
+    };
+    for (int i = 0; map[i].name; i++) {
+        if (strcmp(name, map[i].name) == 0)
+            return (int)map[i].id;
+    }
+    return -1;
+}
+
+static int cmd_animate(f87_ctx *ctx, int argc, char **argv)
+{
+    if (argc < 1) {
+        fprintf(stderr, "Usage: f87ctl animate <effect> [RRGGBB] [--speed 0-4] [--brightness 1-4]\n");
+        return 1;
+    }
+
+    int effect_id = parse_sw_effect(argv[0]);
+    if (effect_id < 0) {
+        fprintf(stderr, "Unknown effect: %s\n", argv[0]);
+        return 1;
+    }
+
+    f87_anim_config_t config = {
+        .color = {255, 80, 0},
+        .brightness = 3,
+        .speed = 2,
+        .audio_source = F87_AUDIO_MONITOR,
+    };
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
+            config.speed = (uint8_t)atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--brightness") == 0 && i + 1 < argc) {
+            config.brightness = (uint8_t)atoi(argv[++i]);
+        } else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
+            f87_color c;
+            if (parse_color(argv[i], &c) == 0) {
+                config.color[0] = c.r;
+                config.color[1] = c.g;
+                config.color[2] = c.b;
+            }
+        }
+    }
+
+    int count = 0;
+    f87_device *dev = open_first_device(ctx, &g_anim_list, &count);
+    if (!dev)
+        return 1;
+    g_anim_dev = dev;
+
+    signal(SIGINT, anim_signal_handler);
+    signal(SIGTERM, anim_signal_handler);
+
+    g_anim_ctx = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+    if (!g_anim_ctx) {
+        fprintf(stderr, "Failed to start animation\n");
+        f87_close(dev);
+        f87_free_device_list(g_anim_list);
+        g_anim_dev = NULL;
+        g_anim_list = NULL;
+        return 1;
+    }
+
+    printf("Running '%s'... (Ctrl+C to stop)\n", f87_sw_effect_name((f87_sw_effect_id)effect_id));
+
+    while (f87_anim_is_running(g_anim_ctx))
+        usleep(100000);
+
+    int err = f87_anim_get_error(g_anim_ctx);
+    f87_anim_stop(g_anim_ctx);
+    g_anim_ctx = NULL;
+
+    if (err < 0)
+        fprintf(stderr, "Animation error: %s\n", f87_strerror(err));
+
+    f87_close(dev);
+    f87_free_device_list(g_anim_list);
+    g_anim_dev = NULL;
+    g_anim_list = NULL;
+    return err < 0 ? 1 : 0;
+}
+
+static int cmd_music(f87_ctx *ctx, int argc, char **argv)
+{
+    if (argc < 1) {
+        fprintf(stderr, "Usage: f87ctl music <mode> [--source monitor|mic]\n");
+        return 1;
+    }
+
+    int effect_id = parse_music_mode(argv[0]);
+    if (effect_id < 0) {
+        fprintf(stderr, "Unknown music mode: %s\n", argv[0]);
+        return 1;
+    }
+
+    f87_anim_config_t config = {
+        .color = {0, 128, 255},
+        .brightness = 4,
+        .speed = 2,
+        .audio_source = F87_AUDIO_MONITOR,
+    };
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--source") == 0 && i + 1 < argc) {
+            i++;
+            if (strcmp(argv[i], "mic") == 0)
+                config.audio_source = F87_AUDIO_MIC;
+        } else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
+            f87_color c;
+            if (parse_color(argv[i], &c) == 0) {
+                config.color[0] = c.r;
+                config.color[1] = c.g;
+                config.color[2] = c.b;
+            }
+        }
+    }
+
+    int count = 0;
+    f87_device *dev = open_first_device(ctx, &g_anim_list, &count);
+    if (!dev)
+        return 1;
+    g_anim_dev = dev;
+
+    signal(SIGINT, anim_signal_handler);
+    signal(SIGTERM, anim_signal_handler);
+
+    g_anim_ctx = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+    if (!g_anim_ctx) {
+        fprintf(stderr, "Failed to start music mode (audio support compiled in?)\n");
+        f87_close(dev);
+        f87_free_device_list(g_anim_list);
+        g_anim_dev = NULL;
+        g_anim_list = NULL;
+        return 1;
+    }
+
+    printf("Running music mode '%s'... (Ctrl+C to stop)\n",
+           f87_sw_effect_name((f87_sw_effect_id)effect_id));
+
+    while (f87_anim_is_running(g_anim_ctx))
+        usleep(100000);
+
+    int err = f87_anim_get_error(g_anim_ctx);
+    f87_anim_stop(g_anim_ctx);
+    g_anim_ctx = NULL;
+
+    if (err < 0)
+        fprintf(stderr, "Music mode error: %s\n", f87_strerror(err));
+
+    f87_close(dev);
+    f87_free_device_list(g_anim_list);
+    g_anim_dev = NULL;
+    g_anim_list = NULL;
+    return err < 0 ? 1 : 0;
+}
+
 static int cmd_raw_send(f87_ctx *ctx, int argc, char **argv)
 {
     if (argc < 1) {
@@ -629,6 +850,12 @@ int main(int argc, char **argv)
 
     } else if (strcmp(cmd, "key") == 0) {
         ret = cmd_key(ctx, argc - 2, argv + 2);
+
+    } else if (strcmp(cmd, "animate") == 0) {
+        ret = cmd_animate(ctx, argc - 2, argv + 2);
+
+    } else if (strcmp(cmd, "music") == 0) {
+        ret = cmd_music(ctx, argc - 2, argv + 2);
 
     } else if (strcmp(cmd, "raw") == 0) {
         if (argc < 3) {
