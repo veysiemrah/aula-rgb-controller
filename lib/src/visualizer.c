@@ -244,6 +244,7 @@ typedef struct {
     float smooth_level;
     float peak;
     int peak_hold;
+    float peak_energy;  /* Auto-gain */
 } vu_viz_data_t;
 
 static int vu_viz_init(f87_effect_ctx_t *ctx)
@@ -262,6 +263,15 @@ static void vu_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     float smooth = 0.3f + (float)(4 - ctx->speed) * 0.1f;
 
     float target = audio ? audio->energy : 0.0f;
+
+    /* Auto-gain: normalize against recent peak */
+    if (target > vd->peak_energy)
+        vd->peak_energy = target;
+    vd->peak_energy *= 0.999f;
+    if (vd->peak_energy < 0.01f) vd->peak_energy = 0.01f;
+    target = target / vd->peak_energy;
+    if (target > 1.0f) target = 1.0f;
+
     vd->smooth_level += (target - vd->smooth_level) * smooth;
 
     if (vd->smooth_level > vd->peak) {
@@ -281,21 +291,23 @@ static void vu_viz_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
         float pos = (float)col / (float)max_col;
 
         if (pos <= level) {
+            /* Color zones based on column position, not level */
             float r, g, b;
-            if (pos < 0.6f) {
-                r = 0; g = 255; b = 0;
-            } else if (pos < 0.8f) {
-                r = 255; g = 255; b = 0;
+            if (pos < 0.2f) {
+                r = 0; g = 255; b = 0;               /* Green */
+            } else if (pos < 0.7f) {
+                r = 255; g = 255; b = 0;             /* Yellow */
             } else {
-                r = 255; g = 0; b = 0;
+                r = 255; g = 0; b = 0;               /* Red */
             }
             frame->keys[k][0] = (uint8_t)(r * br_scale);
             frame->keys[k][1] = (uint8_t)(g * br_scale);
             frame->keys[k][2] = (uint8_t)(b * br_scale);
-        } else if (fabsf(pos - vd->peak) < 0.05f && vd->peak > 0.05f) {
+        } else if (fabsf(pos - vd->peak) < 0.06f && vd->peak > 0.05f) {
+            /* Peak indicator: red */
             frame->keys[k][0] = (uint8_t)(255 * br_scale);
-            frame->keys[k][1] = (uint8_t)(255 * br_scale);
-            frame->keys[k][2] = (uint8_t)(255 * br_scale);
+            frame->keys[k][1] = 0;
+            frame->keys[k][2] = 0;
         }
     }
 }

@@ -200,6 +200,13 @@ static void *anim_thread_func(void *arg)
         uint64_t elapsed = f87_time_us() - t0;
         if (elapsed < F87_ANIM_FRAME_US)
             usleep((useconds_t)(F87_ANIM_FRAME_US - elapsed));
+
+        /* FPS counter (prints every 3 seconds) */
+        if (ctx->effect_ctx.frame_count % 90 == 0 && ctx->effect_ctx.frame_count > 0) {
+            uint64_t total = f87_time_us() - ctx->effect_ctx.start_time_us;
+            float fps = (float)ctx->effect_ctx.frame_count / ((float)total / 1000000.0f);
+            fprintf(stderr, "f87: %.1f fps (%lu frames)\n", fps, (unsigned long)ctx->effect_ctx.frame_count);
+        }
     }
 
     f87_direct_mode_disable(ctx->dev);
