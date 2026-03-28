@@ -536,6 +536,7 @@ static int parse_sw_effect(const char *name)
         {"ripple-sw",  F87_SW_RIPPLE},
         {"typewriter", F87_SW_TYPEWRITER},
         {"life",       F87_SW_LIFE},
+        {"keyheat",    F87_SW_KEYHEAT},
         {NULL, 0}
     };
     for (int i = 0; map[i].name; i++) {

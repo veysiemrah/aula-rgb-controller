@@ -367,6 +367,92 @@ static const f87_sw_effect_t effect_life = {
     .on_key = life_on_key, .destroy = life_destroy,
 };
 
+/* ===== KEYHEAT EFFECT ===== */
+/* Cumulative key usage heatmap — each press adds heat, slowly decays */
+
+typedef struct {
+    float heat[F87_KEY_COUNT];    /* Cumulative heat per key */
+    float max_heat;               /* Tracks maximum for normalization */
+} keyheat_data_t;
+
+static int keyheat_init(f87_effect_ctx_t *ctx)
+{
+    keyheat_data_t *kd = calloc(1, sizeof(keyheat_data_t));
+    if (!kd) return F87_ERR_NOMEM;
+    kd->max_heat = 1.0f;
+    ctx->effect_data = kd;
+    return F87_OK;
+}
+
+static void keyheat_on_key(f87_effect_ctx_t *ctx, int key_id)
+{
+    keyheat_data_t *kd = ctx->effect_data;
+    kd->heat[key_id] += 1.0f;
+    if (kd->heat[key_id] > kd->max_heat)
+        kd->max_heat = kd->heat[key_id];
+}
+
+static void keyheat_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
+                            const f87_audio_data_t *audio)
+{
+    (void)audio;
+    keyheat_data_t *kd = ctx->effect_data;
+    float br_scale = (float)ctx->brightness / 4.0f;
+
+    /* Thresholds scale with speed: speed 0 = default, higher = faster ramp.
+     * Base thresholds: 5, 15, 30, 60, 100.
+     * speed 0: 1x, speed 1: 0.8x, speed 2: 0.6x, speed 3: 0.4x, speed 4: 0.2x */
+    float scale = 1.0f - (float)ctx->speed * 0.2f;
+    if (scale < 0.2f) scale = 0.2f;
+    int t1 = (int)(5.0f * scale);   if (t1 < 1) t1 = 1;   /* → blue */
+    int t2 = (int)(15.0f * scale);  if (t2 < 2) t2 = 2;   /* → green */
+    int t3 = (int)(30.0f * scale);  if (t3 < 3) t3 = 3;   /* → yellow */
+    int t4 = (int)(60.0f * scale);  if (t4 < 4) t4 = 4;   /* → orange */
+    int t5 = (int)(100.0f * scale); if (t5 < 5) t5 = 5;   /* → red */
+
+    for (int k = 0; k < F87_KEY_COUNT; k++) {
+        int presses = (int)kd->heat[k];
+        if (presses < 1) continue;
+
+        float r, g, b;
+        if (presses < t1) {
+            float t = (float)presses / (float)t1;
+            r = 0; g = 0; b = t * 200.0f;                         /* dark → blue */
+        } else if (presses < t2) {
+            float t = (float)(presses - t1) / (float)(t2 - t1);
+            r = 0; g = (0.4f + t * 0.6f) * 255.0f; b = (1 - t) * 200.0f;  /* blue → green */
+        } else if (presses < t3) {
+            float t = (float)(presses - t2) / (float)(t3 - t2);
+            r = t * 255.0f; g = 255.0f; b = 0;                    /* green → yellow */
+        } else if (presses < t4) {
+            float t = (float)(presses - t3) / (float)(t4 - t3);
+            r = 255.0f; g = (1 - t * 0.6f) * 255.0f; b = 0;      /* yellow → orange */
+        } else if (presses < t5) {
+            float t = (float)(presses - t4) / (float)(t5 - t4);
+            r = 255.0f; g = (0.4f - t * 0.4f) * 255.0f; b = 0;   /* orange → red */
+        } else {
+            r = 255.0f; g = 0; b = 0;                              /* red (max) */
+        }
+
+        frame->keys[k][0] = (uint8_t)(r * br_scale);
+        frame->keys[k][1] = (uint8_t)(g * br_scale);
+        frame->keys[k][2] = (uint8_t)(b * br_scale);
+    }
+}
+
+static void keyheat_destroy(f87_effect_ctx_t *ctx)
+{
+    free(ctx->effect_data);
+    ctx->effect_data = NULL;
+}
+
+static const f87_sw_effect_t effect_keyheat = {
+    .name = "KeyHeat", .id = F87_SW_KEYHEAT,
+    .needs_audio = false, .needs_input = true,
+    .init = keyheat_init, .render = keyheat_render,
+    .on_key = keyheat_on_key, .destroy = keyheat_destroy,
+};
+
 /* ===== REACTIVE REGISTRY ===== */
 
 static const f87_sw_effect_t *reactive_effects[] = {
@@ -374,6 +460,7 @@ static const f87_sw_effect_t *reactive_effects[] = {
     &effect_ripple,
     &effect_typewriter,
     &effect_life,
+    &effect_keyheat,
     NULL
 };
 

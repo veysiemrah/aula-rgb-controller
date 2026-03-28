@@ -23,6 +23,7 @@ typedef enum {
     F87_SW_RIPPLE     = 111,
     F87_SW_TYPEWRITER = 112,
     F87_SW_LIFE       = 113,
+    F87_SW_KEYHEAT    = 114,
     /* Music-reactive effects */
     F87_MU_SPECTRUM   = 200,
     F87_MU_BEAT       = 201,
