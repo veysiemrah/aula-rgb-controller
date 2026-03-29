@@ -1,4 +1,5 @@
 #include <adwaita.h>
+#include <f87/logger.h>
 #include "window.h"
 
 static void on_activate(GtkApplication *app, gpointer user_data)
@@ -24,6 +25,8 @@ static void on_activate(GtkApplication *app, gpointer user_data)
 
 int main(int argc, char *argv[])
 {
+    f87_log_init(F87_LOG_STDERR);
+
     AdwApplication *app = adw_application_new("com.f87control",
                                                G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);

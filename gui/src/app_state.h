@@ -3,6 +3,7 @@
 
 #include <f87/f87.h>
 #include <f87/client.h>
+#include <f87/logger.h>
 #include <stdbool.h>
 
 typedef enum {
@@ -15,6 +16,7 @@ typedef struct {
     f87_client *client;
     f87_gui_status_t status;
     char status_text[256];
+    int status_level;  /* F87_LOG_INFO, F87_LOG_WARN, F87_LOG_ERROR */
     int current_effect_id;
     char current_category[16];
     char current_sensor_profile[64];

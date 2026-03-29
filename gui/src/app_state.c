@@ -1,4 +1,5 @@
 #include "app_state.h"
+#include <f87/logger.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -13,6 +14,7 @@ int f87_app_state_init(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Daemon'a baglanilamadi");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
         return -1;
     }
 
@@ -21,6 +23,7 @@ int f87_app_state_init(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Daemon durumu alinamadi");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
         return -1;
     }
 
@@ -29,10 +32,12 @@ int f87_app_state_init(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Bagli (daemon)");
         state->status = F87_GUI_IDLE;
+        state->status_level = F87_LOG_INFO;
     } else {
         snprintf(state->status_text, sizeof(state->status_text),
                  "Klavye bulunamadi");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
     }
 
     return 0;
@@ -55,6 +60,7 @@ int f87_app_state_rescan(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Tarama basarisiz");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
         return -1;
     }
 
@@ -63,10 +69,12 @@ int f87_app_state_rescan(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Bagli (daemon)");
         state->status = F87_GUI_IDLE;
+        state->status_level = F87_LOG_INFO;
     } else {
         snprintf(state->status_text, sizeof(state->status_text),
                  "Klavye bulunamadi");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
     }
     return 0;
 }
@@ -100,6 +108,7 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
             snprintf(state->status_text, sizeof(state->status_text),
                      "Klavye baglantisi koptu — yeniden baglanamadi");
             state->status = F87_GUI_ERROR;
+            state->status_level = F87_LOG_ERROR;
             state->device_connected = false;
             return rc;
         }
@@ -108,6 +117,7 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
     snprintf(state->status_text, sizeof(state->status_text),
              "%s calisiyor", f87_mode_name((f87_mode)mode_id));
     state->status = F87_GUI_RUNNING;
+    state->status_level = F87_LOG_INFO;
     state->current_effect_id = mode_id;
     strncpy(state->current_category, "hw", sizeof(state->current_category));
     return 0;
@@ -158,6 +168,7 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
             snprintf(state->status_text, sizeof(state->status_text),
                      "Klavye baglantisi koptu — yeniden baglanamadi");
             state->status = F87_GUI_ERROR;
+            state->status_level = F87_LOG_ERROR;
             state->device_connected = false;
             return -1;
         }
@@ -166,6 +177,7 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
     snprintf(state->status_text, sizeof(state->status_text),
              "%s calisiyor", f87_sw_effect_name((f87_sw_effect_id)effect_id));
     state->status = F87_GUI_RUNNING;
+    state->status_level = F87_LOG_INFO;
     state->current_effect_id = effect_id;
     return 0;
 }
@@ -179,11 +191,13 @@ int f87_app_state_stop(f87_app_state_t *state)
         snprintf(state->status_text, sizeof(state->status_text),
                  "Durdurma hatasi");
         state->status = F87_GUI_ERROR;
+        state->status_level = F87_LOG_ERROR;
         return rc;
     }
 
     snprintf(state->status_text, sizeof(state->status_text), "Bekleniyor");
     state->status = F87_GUI_IDLE;
+    state->status_level = F87_LOG_INFO;
     return 0;
 }
 
@@ -200,6 +214,7 @@ int f87_app_state_apply_custom(f87_app_state_t *state,
             snprintf(state->status_text, sizeof(state->status_text),
                      "Per-key renkler gonderilemedi");
             state->status = F87_GUI_ERROR;
+            state->status_level = F87_LOG_ERROR;
             return -1;
         }
     }
@@ -207,6 +222,7 @@ int f87_app_state_apply_custom(f87_app_state_t *state,
     snprintf(state->status_text, sizeof(state->status_text),
              "Custom calisiyor");
     state->status = F87_GUI_RUNNING;
+    state->status_level = F87_LOG_INFO;
     state->current_effect_id = 18;
     strncpy(state->current_category, "hw", sizeof(state->current_category));
     return 0;

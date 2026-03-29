@@ -22,6 +22,16 @@ static void on_status_update(const char *text, gpointer user_data)
 {
     F87Window *self = user_data;
     gtk_label_set_text(self->status_label, text);
+
+    /* Update color based on status */
+    gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-error");
+    gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-warn");
+    gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-ok");
+
+    if (self->app_state.status == F87_GUI_ERROR)
+        gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
+    else if (self->app_state.status == F87_GUI_RUNNING)
+        gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-ok");
 }
 
 static void on_effect_selected(const char *category, const char *effect_name,
@@ -109,6 +119,8 @@ static void f87_window_init(F87Window *self)
     /* Initialize device connection */
     f87_app_state_init(&self->app_state);
     gtk_label_set_text(self->status_label, self->app_state.status_text);
+    if (self->app_state.status == F87_GUI_ERROR)
+        gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
 }
 
 static void f87_window_dispose(GObject *obj)

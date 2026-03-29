@@ -50,6 +50,14 @@ window {
     color: #e94560;
 }
 
+.status-warn {
+    color: #e5a50a;
+}
+
+.status-ok {
+    color: #2ec27e;
+}
+
 .status-running {
     color: #4cc9f0;
 }
