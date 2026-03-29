@@ -101,6 +101,7 @@ Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon
 - `daemon/src/device_manager.c` — hotplug monitoring, auto-reconnect
 - `daemon/src/effect_manager.c` — effect lifecycle management
 - `daemon/src/idle_monitor.c` — idle timeout (5min, disabled during SW effects)
+- `daemon/src/profile_manager.c` — JSON profile serialize/deserialize, file I/O
 - `lib/include/f87/client.h` — D-Bus proxy client API
 - `lib/src/client.c` — D-Bus proxy implementation
 - `dbus/org.f87.Control.service` — D-Bus auto-activation
@@ -136,6 +137,16 @@ cd build && ctest --output-on-failure
 ./f87ctl stop
 ./f87ctl off
 
+# Profile management
+./f87ctl profile save gaming
+./f87ctl profile load gaming
+./f87ctl profile list
+./f87ctl profile delete gaming
+
+# Side/battery light
+./f87ctl sidelight 1
+./f87ctl batterylight 0
+
 # Direct USB mode (bypass daemon, for debug)
 ./f87ctl --direct info
 ./f87ctl --direct effect wave
@@ -165,7 +176,11 @@ cd build && ctest --output-on-failure
   - Idle timeout (5min, disabled during SW effects)
   - Proxy client library (client.h/client.c)
   - CLI/GUI migrated to daemon
-- Faz 6.2: Profiles (not started)
+- Faz 6.2: Profiles (complete)
+  - JSON profiles in ~/.config/f87control/profiles/
+  - Last-state restore on daemon startup
+  - Side/battery light control via D-Bus
+  - CLI profile save/load/delete/list commands
 - Faz 6.3: Wireless support (not started)
 
 ## Known Limitations (Firmware)
