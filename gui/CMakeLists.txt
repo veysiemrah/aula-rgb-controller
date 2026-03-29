@@ -19,6 +19,7 @@ add_executable(f87control
     src/window.c
     src/sidebar.c
     src/app_state.c
+    src/controls.c
     ${GRESOURCE_C}
 )
 

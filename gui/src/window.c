@@ -1,6 +1,7 @@
 #include "window.h"
 #include "sidebar.h"
 #include "app_state.h"
+#include "controls.h"
 #include <stdio.h>
 
 struct _F87Window {
@@ -10,16 +11,25 @@ struct _F87Window {
     GtkBox *main_box;
     GtkLabel *status_label;
     f87_app_state_t app_state;
+    F87Controls *controls;
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
+
+static void on_status_update(const char *text, gpointer user_data)
+{
+    F87Window *self = user_data;
+    gtk_label_set_text(self->status_label, text);
+}
 
 static void on_effect_selected(const char *category, const char *effect_name,
                                 int effect_id, gpointer user_data)
 {
     F87Window *self = user_data;
+    f87_controls_set_effect(self->controls, category, effect_name, effect_id);
+
     char buf[256];
-    snprintf(buf, sizeof(buf), "Secilen: %s — %s (id=%d)", category, effect_name, effect_id);
+    snprintf(buf, sizeof(buf), "Secilen: %s", effect_name);
     gtk_label_set_text(self->status_label, buf);
 }
 
@@ -62,13 +72,9 @@ static void f87_window_init(F87Window *self)
     gtk_box_append(kb_box, GTK_WIDGET(kb_label));
     gtk_box_append(right_box, GTK_WIDGET(kb_box));
 
-    /* Controls placeholder */
-    GtkBox *ctrl_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-    gtk_widget_add_css_class(GTK_WIDGET(ctrl_box), "controls-panel");
-    GtkLabel *ctrl_label = GTK_LABEL(gtk_label_new("Efekt seciniz"));
-    gtk_widget_set_opacity(GTK_WIDGET(ctrl_label), 0.5);
-    gtk_box_append(ctrl_box, GTK_WIDGET(ctrl_label));
-    gtk_box_append(right_box, GTK_WIDGET(ctrl_box));
+    /* Control panel (populated on effect selection) */
+    self->controls = f87_controls_new(&self->app_state, on_status_update, self);
+    gtk_box_append(right_box, f87_controls_get_widget(self->controls));
 
     /* Status bar */
     self->status_label = GTK_LABEL(gtk_label_new("Bekleniyor"));
