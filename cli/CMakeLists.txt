@@ -1,3 +1,4 @@
+include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JSON_C REQUIRED json-c)
 
@@ -21,3 +22,5 @@ target_compile_options(f87ctl
     PRIVATE
         ${JSON_C_CFLAGS_OTHER}
 )
+
+install(TARGETS f87ctl DESTINATION ${CMAKE_INSTALL_BINDIR})

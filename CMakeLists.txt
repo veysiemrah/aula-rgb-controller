@@ -7,6 +7,7 @@ project(F87Control
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_options(-Wall -Wextra -Wno-unused-parameter)
 
 enable_testing()
 add_executable(test_device tests/test_device.c)
@@ -21,13 +22,12 @@ add_test(NAME ring_buffer_tests COMMAND test_ring_buffer)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PULSE libpulse-simple)
-if(PULSE_FOUND)
-    add_executable(test_spectrum tests/test_spectrum.c lib/src/spectrum.c)
-    target_include_directories(test_spectrum PRIVATE lib/src lib/include vendor/kissfft)
-    target_link_libraries(test_spectrum kissfft m)
-    target_compile_definitions(test_spectrum PRIVATE F87_HAS_AUDIO=1)
-    add_test(NAME spectrum_tests COMMAND test_spectrum)
-endif()
+
+add_executable(test_spectrum tests/test_spectrum.c lib/src/spectrum.c)
+target_include_directories(test_spectrum PRIVATE lib/src lib/include vendor/kissfft)
+target_link_libraries(test_spectrum kissfft m)
+target_compile_definitions(test_spectrum PRIVATE F87_HAS_AUDIO=1)
+add_test(NAME spectrum_tests COMMAND test_spectrum)
 
 add_executable(test_sensor tests/test_sensor.c lib/src/sensor.c)
 target_include_directories(test_sensor PRIVATE lib/src lib/include)
@@ -63,6 +63,8 @@ target_include_directories(test_error_history PRIVATE daemon/src lib/include lib
 target_link_libraries(test_error_history Threads::Threads)
 add_test(NAME error_history_tests COMMAND test_error_history)
 
+include(GNUInstallDirs)
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 option(BUILD_DAEMON "Build the f87d D-Bus daemon" ON)
@@ -81,3 +83,6 @@ endif()
 if(BUILD_DAEMON)
     add_subdirectory(daemon)
 endif()
+
+install(DIRECTORY configs/sensor DESTINATION ${CMAKE_INSTALL_DATADIR}/f87control)
+install(FILES udev/99-f87.rules DESTINATION ${CMAKE_INSTALL_LIBDIR}/udev/rules.d)

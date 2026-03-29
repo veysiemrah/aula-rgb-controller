@@ -1,9 +1,10 @@
+include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK4 REQUIRED gtk4)
 pkg_check_modules(ADW REQUIRED libadwaita-1)
 
 # Compile GResource
-find_program(GLIB_COMPILE_RESOURCES glib-compile-resources)
+find_program(GLIB_COMPILE_RESOURCES glib-compile-resources REQUIRED)
 set(GRESOURCE_XML ${CMAKE_CURRENT_SOURCE_DIR}/resources/f87control.gresource.xml)
 set(GRESOURCE_C ${CMAKE_CURRENT_BINARY_DIR}/resources.c)
 add_custom_command(
@@ -43,3 +44,5 @@ target_compile_options(f87control PRIVATE
     ${GTK4_CFLAGS_OTHER}
     ${ADW_CFLAGS_OTHER}
 )
+
+install(TARGETS f87control DESTINATION ${CMAKE_INSTALL_BINDIR})

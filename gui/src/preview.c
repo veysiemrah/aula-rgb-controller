@@ -238,7 +238,8 @@ static void render_fire(f87_preview_t *p)
     for (int r = 0; r < GRID_ROWS - 1; r++) {
         for (int c = 0; c < GRID_COLS; c++) {
             int sc = c + (int)(rng_next(&p->rng) % 3) - 1;
-            if (sc < 0) sc = 0; if (sc >= GRID_COLS) sc = GRID_COLS - 1;
+            if (sc < 0) sc = 0;
+            if (sc >= GRID_COLS) sc = GRID_COLS - 1;
             float d = decay_base * (float)(rng_next(&p->rng) % 100) / 100.0f;
             s->heat[r][c] = s->heat[r + 1][sc] - d;
             if (s->heat[r][c] < 0) s->heat[r][c] = 0;
@@ -380,7 +381,9 @@ static void render_lightning(f87_preview_t *p)
         float cr = white * 255 + (1 - white) * p->color[0] * v;
         float cg = white * 255 + (1 - white) * p->color[1] * v;
         float cb = white * 255 + (1 - white) * p->color[2] * v;
-        if (cr > 255) cr = 255; if (cg > 255) cg = 255; if (cb > 255) cb = 255;
+        if (cr > 255) cr = 255;
+        if (cg > 255) cg = 255;
+        if (cb > 255) cb = 255;
         p->buf[k][0] = (uint8_t)cr; p->buf[k][1] = (uint8_t)cg; p->buf[k][2] = (uint8_t)cb;
     }
 }

@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.f87.Control
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/f87d

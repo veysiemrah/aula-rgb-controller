@@ -1,3 +1,4 @@
+include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
@@ -65,7 +66,7 @@ endif()
 if(BUILD_AUDIO AND PULSE_FOUND)
     target_sources(f87 PRIVATE src/audio.c src/spectrum.c src/visualizer.c)
     target_include_directories(f87 PRIVATE ${PULSE_INCLUDE_DIRS})
-    target_link_libraries(f87 PRIVATE ${PULSE_LIBRARIES} kissfft m)
+    target_link_libraries(f87 PRIVATE ${PULSE_LIBRARIES} kissfft)
     target_compile_definitions(f87 PRIVATE F87_HAS_AUDIO=1)
 endif()
 
@@ -73,3 +74,6 @@ set_target_properties(f87 PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
 )
+
+install(TARGETS f87 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY include/f87 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
