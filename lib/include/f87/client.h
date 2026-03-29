@@ -39,6 +39,8 @@ int f87_client_off(f87_client *client);
 int f87_client_get_status(f87_client *client, f87_client_status_t *status);
 int f87_client_is_connected(f87_client *client);
 int f87_client_rescan(f87_client *client);
+int f87_client_get_battery(f87_client *client);
+int f87_client_is_wireless(f87_client *client);
 
 /* Side/battery light */
 int f87_client_set_side_light(f87_client *client, uint8_t mode);

@@ -54,6 +54,7 @@ static void usage(const char *progname)
         "  profile list                     List saved profiles\n"
         "  sidelight <0-4>                  Set side light mode\n"
         "  batterylight <0-4>               Set battery light mode\n"
+        "  battery                          Show battery level (wireless)\n"
         "\n"
         "Options:\n"
         "  --direct                          Bypass daemon, use direct USB\n"
@@ -839,6 +840,13 @@ static int dispatch_client(f87_client *client, const char *cmd,
             return 1;
         }
         printf("Connected: %s\n", st.connected ? "yes" : "no");
+        if (st.connected) {
+            int wireless = f87_client_is_wireless(client);
+            printf("Connection: %s\n", wireless > 0 ? "wireless" : "wired");
+            int battery = f87_client_get_battery(client);
+            if (battery >= 0)
+                printf("Battery: %d%%\n", battery);
+        }
         printf("Active effect: %d (%s)\n", st.active_effect, st.category);
         return 0;
 
@@ -1008,6 +1016,14 @@ static int dispatch_client(f87_client *client, const char *cmd,
             fprintf(stderr, "Unknown profile subcommand '%s'.\n", sub);
             return 1;
         }
+
+    } else if (strcmp(cmd, "battery") == 0) {
+        int level = f87_client_get_battery(client);
+        if (level < 0)
+            printf("Battery: N/A (wired or unknown)\n");
+        else
+            printf("Battery: %d%%\n", level);
+        return 0;
 
     } else if (strcmp(cmd, "sidelight") == 0) {
         if (argc < 1) { fprintf(stderr, "Usage: f87ctl sidelight <0-4>\n"); return 1; }
