@@ -89,14 +89,9 @@ static void f87_window_init(F87Window *self)
     gtk_widget_set_vexpand(GTK_WIDGET(self->keyboard), TRUE);
     gtk_box_append(right_box, GTK_WIDGET(self->keyboard));
 
-    /* Control panel in scrolled window — prevents resizing */
+    /* Control panel — scrollable parameters + fixed buttons at bottom */
     self->controls = f87_controls_new(&self->app_state, on_status_update, self);
-    GtkScrolledWindow *ctrl_scroll = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new());
-    gtk_scrolled_window_set_policy(ctrl_scroll, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_scrolled_window_set_child(ctrl_scroll, f87_controls_get_widget(self->controls));
-    gtk_widget_set_vexpand(GTK_WIDGET(ctrl_scroll), FALSE);
-    gtk_widget_set_size_request(GTK_WIDGET(ctrl_scroll), -1, 260);
-    gtk_box_append(right_box, GTK_WIDGET(ctrl_scroll));
+    gtk_box_append(right_box, f87_controls_get_widget(self->controls));
 
     /* Status bar */
     self->status_label = GTK_LABEL(gtk_label_new("Bekleniyor"));

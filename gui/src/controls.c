@@ -323,21 +323,6 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
     else if (strcmp(category, "sensor") == 0)
         build_sensor_controls(ctrl);
 
-    /* Action buttons */
-    GtkBox *btn_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8));
-    gtk_widget_set_margin_top(GTK_WIDGET(btn_box), 8);
-
-    ctrl->send_button = GTK_BUTTON(gtk_button_new_with_label("Klavyeye Gonder"));
-    gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
-    g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
-    gtk_box_append(btn_box, GTK_WIDGET(ctrl->send_button));
-
-    ctrl->stop_button = GTK_BUTTON(gtk_button_new_with_label("Durdur"));
-    gtk_widget_add_css_class(GTK_WIDGET(ctrl->stop_button), "stop-button");
-    g_signal_connect(ctrl->stop_button, "clicked", G_CALLBACK(on_stop_clicked), ctrl);
-    gtk_box_append(btn_box, GTK_WIDGET(ctrl->stop_button));
-
-    gtk_box_append(ctrl->params_box, GTK_WIDGET(btn_box));
 }
 
 GtkWidget *f87_controls_get_widget(F87Controls *ctrl)
@@ -357,16 +342,37 @@ F87Controls *f87_controls_new(f87_app_state_t *state,
     ctrl->selected_color[1] = 80;
     ctrl->selected_color[2] = 0;
 
-    ctrl->container = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    ctrl->container = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 4));
     gtk_widget_add_css_class(GTK_WIDGET(ctrl->container), "controls-panel");
-    gtk_widget_set_size_request(GTK_WIDGET(ctrl->container), -1, 250);
-    gtk_widget_set_vexpand(GTK_WIDGET(ctrl->container), FALSE);
+
+    /* Scrollable parameters area */
+    GtkScrolledWindow *scroll = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new());
+    gtk_scrolled_window_set_policy(scroll, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(GTK_WIDGET(scroll), -1, 200);
 
     ctrl->params_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
     GtkLabel *placeholder = GTK_LABEL(gtk_label_new("Efekt seciniz"));
     gtk_widget_set_opacity(GTK_WIDGET(placeholder), 0.5);
     gtk_box_append(ctrl->params_box, GTK_WIDGET(placeholder));
 
-    gtk_box_append(ctrl->container, GTK_WIDGET(ctrl->params_box));
+    gtk_scrolled_window_set_child(scroll, GTK_WIDGET(ctrl->params_box));
+    gtk_box_append(ctrl->container, GTK_WIDGET(scroll));
+
+    /* Fixed action buttons at bottom — always visible */
+    GtkBox *btn_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8));
+    gtk_widget_set_margin_top(GTK_WIDGET(btn_box), 4);
+
+    ctrl->send_button = GTK_BUTTON(gtk_button_new_with_label("Klavyeye Gonder"));
+    gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
+    g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
+    gtk_box_append(btn_box, GTK_WIDGET(ctrl->send_button));
+
+    ctrl->stop_button = GTK_BUTTON(gtk_button_new_with_label("Durdur"));
+    gtk_widget_add_css_class(GTK_WIDGET(ctrl->stop_button), "stop-button");
+    g_signal_connect(ctrl->stop_button, "clicked", G_CALLBACK(on_stop_clicked), ctrl);
+    gtk_box_append(btn_box, GTK_WIDGET(ctrl->stop_button));
+
+    gtk_box_append(ctrl->container, GTK_WIDGET(btn_box));
+
     return ctrl;
 }
