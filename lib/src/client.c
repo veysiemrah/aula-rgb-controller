@@ -1,4 +1,5 @@
 #include "f87/client.h"
+#include "f87/logger.h"
 #include <systemd/sd-bus.h>
 #include <stdlib.h>
 #include <string.h>
@@ -340,6 +341,86 @@ void f87_client_free_profile_list(char **names, int count)
     for (int i = 0; i < count; i++)
         free(names[i]);
     free(names);
+}
+
+/* ---- Error history / log level ---- */
+
+int f87_client_get_error_history(f87_client *client,
+                                  f87_log_entry_t *entries, int max_entries)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_call_method(client->bus, DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                               "GetErrorHistory", &error, &reply, "");
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    r = sd_bus_message_enter_container(reply, 'a', "(tsssis)");
+    if (r < 0) goto done;
+
+    int count = 0;
+    uint64_t ts;
+    const char *level_str, *source_str, *msg_str, *strerr;
+    int32_t ec;
+
+    while (sd_bus_message_read(reply, "(tsssis)",
+           &ts, &level_str, &source_str, &msg_str, &ec, &strerr) > 0) {
+        if (count >= max_entries) break;
+        entries[count].timestamp_us = ts;
+        entries[count].level = f87_log_level_from_string(level_str);
+        entries[count].error_code = ec;
+        strncpy(entries[count].message, msg_str,
+                sizeof(entries[count].message) - 1);
+        entries[count].message[sizeof(entries[count].message) - 1] = '\0';
+        if (strcmp(source_str, "USB") == 0)         entries[count].source = F87_SRC_USB;
+        else if (strcmp(source_str, "AUDIO") == 0)  entries[count].source = F87_SRC_AUDIO;
+        else if (strcmp(source_str, "DBUS") == 0)   entries[count].source = F87_SRC_DBUS;
+        else if (strcmp(source_str, "DEVICE") == 0) entries[count].source = F87_SRC_DEVICE;
+        else if (strcmp(source_str, "EFFECT") == 0) entries[count].source = F87_SRC_EFFECT;
+        else if (strcmp(source_str, "GUI") == 0)    entries[count].source = F87_SRC_GUI;
+        count++;
+    }
+
+    sd_bus_message_exit_container(reply);
+
+done:
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return count;
+}
+
+int f87_client_clear_error_history(f87_client *client)
+{
+    return call_bool(client, "ClearErrorHistory", NULL);
+}
+
+int f87_client_set_log_level(f87_client *client, const char *level)
+{
+    return call_bool(client, "SetLogLevel", "s", level);
+}
+
+int f87_client_get_log_level(f87_client *client, char *out, int out_size)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_call_method(client->bus, DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                               "GetLogLevel", &error, &reply, "");
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    const char *val = NULL;
+    sd_bus_message_read(reply, "s", &val);
+    if (val)
+        strncpy(out, val, (size_t)(out_size - 1));
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return 0;
 }
 
 /* Signal match callbacks */

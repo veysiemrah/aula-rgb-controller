@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "device.h"
 #include "animate.h"
+#include "logger.h"
 
 typedef struct f87_client f87_client;
 
@@ -56,6 +57,15 @@ int f87_client_load_profile(f87_client *client, const char *name);
 int f87_client_delete_profile(f87_client *client, const char *name);
 int f87_client_list_profiles(f87_client *client, char ***names, int *count);
 void f87_client_free_profile_list(char **names, int count);
+
+/* Error history */
+int f87_client_get_error_history(f87_client *client,
+                                  f87_log_entry_t *entries, int max_entries);
+int f87_client_clear_error_history(f87_client *client);
+
+/* Log level */
+int f87_client_set_log_level(f87_client *client, const char *level);
+int f87_client_get_log_level(f87_client *client, char *out, int out_size);
 
 typedef void (*f87_client_device_cb)(bool connected, const char *product,
                                       void *userdata);
