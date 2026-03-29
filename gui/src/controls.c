@@ -126,7 +126,7 @@ static void sync_color_from_hsv(F87Controls *ctrl)
 
 /* ===== SV GRADIENT AREA (Saturation-Value picker) ===== */
 
-#define SV_SIZE 150
+#define SV_SIZE 120
 
 static void sv_draw(GtkDrawingArea *area, cairo_t *cr,
                      int width, int height, gpointer data)
@@ -244,114 +244,7 @@ static void on_preset_clicked(GtkButton *btn, gpointer data)
     sync_color_from_hsv(ctrl);
 }
 
-/* ===== COLOR PICKER WIDGET ===== */
-
-static GtkWidget *create_color_picker(F87Controls *ctrl)
-{
-    GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 4));
-
-    /* SV gradient area */
-    ctrl->sv_area = GTK_DRAWING_AREA(gtk_drawing_area_new());
-    gtk_drawing_area_set_content_width(ctrl->sv_area, SV_SIZE);
-    gtk_drawing_area_set_content_height(ctrl->sv_area, SV_SIZE);
-    gtk_widget_set_size_request(GTK_WIDGET(ctrl->sv_area), SV_SIZE, SV_SIZE);
-    gtk_drawing_area_set_draw_func(ctrl->sv_area, sv_draw, ctrl, NULL);
-    gtk_widget_set_cursor_from_name(GTK_WIDGET(ctrl->sv_area), "crosshair");
-
-    /* Click + drag on SV area */
-    GtkGesture *click = gtk_gesture_click_new();
-    g_signal_connect(click, "pressed", G_CALLBACK(sv_pressed), ctrl);
-    g_signal_connect(click, "released", G_CALLBACK(sv_released), ctrl);
-    gtk_widget_add_controller(GTK_WIDGET(ctrl->sv_area), GTK_EVENT_CONTROLLER(click));
-
-    GtkEventController *motion = gtk_event_controller_motion_new();
-    g_signal_connect(motion, "motion", G_CALLBACK(sv_motion), ctrl);
-    gtk_widget_add_controller(GTK_WIDGET(ctrl->sv_area), motion);
-
-    gtk_box_append(box, GTK_WIDGET(ctrl->sv_area));
-
-    /* Hue slider */
-    ctrl->hue_scale = GTK_SCALE(gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                           0, 359, 1));
-    gtk_range_set_value(GTK_RANGE(ctrl->hue_scale), ctrl->hue);
-    gtk_scale_set_draw_value(ctrl->hue_scale, FALSE);
-    gtk_widget_add_css_class(GTK_WIDGET(ctrl->hue_scale), "hue-slider");
-    g_signal_connect(ctrl->hue_scale, "value-changed", G_CALLBACK(on_hue_changed), ctrl);
-    gtk_box_append(box, GTK_WIDGET(ctrl->hue_scale));
-
-    /* Bottom row: hex input + preview swatch + presets */
-    GtkBox *bottom = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4));
-
-    /* Hex input */
-    GtkBox *hex_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2));
-    GtkLabel *hash = GTK_LABEL(gtk_label_new("#"));
-    gtk_widget_set_opacity(GTK_WIDGET(hash), 0.7);
-    gtk_box_append(hex_box, GTK_WIDGET(hash));
-
-    ctrl->hex_entry = GTK_ENTRY(gtk_entry_new());
-    gtk_entry_set_max_length(ctrl->hex_entry, 6);
-    gtk_widget_set_size_request(GTK_WIDGET(ctrl->hex_entry), 70, -1);
-    char hex[8];
-    snprintf(hex, sizeof(hex), "%02X%02X%02X",
-             ctrl->selected_color[0], ctrl->selected_color[1], ctrl->selected_color[2]);
-    gtk_editable_set_text(GTK_EDITABLE(ctrl->hex_entry), hex);
-    g_signal_connect(ctrl->hex_entry, "activate", G_CALLBACK(on_hex_activate), ctrl);
-    gtk_box_append(hex_box, GTK_WIDGET(ctrl->hex_entry));
-    gtk_box_append(bottom, GTK_WIDGET(hex_box));
-
-    /* Preview swatch */
-    ctrl->preview_swatch = gtk_drawing_area_new();
-    gtk_widget_set_size_request(ctrl->preview_swatch, 24, 24);
-    gtk_widget_add_css_class(ctrl->preview_swatch, "color-preview");
-    gtk_box_append(bottom, ctrl->preview_swatch);
-
-    /* Preset swatches */
-    GtkFlowBox *flow = GTK_FLOW_BOX(gtk_flow_box_new());
-    gtk_flow_box_set_max_children_per_line(flow, 12);
-    gtk_flow_box_set_selection_mode(flow, GTK_SELECTION_NONE);
-    gtk_flow_box_set_row_spacing(flow, 1);
-    gtk_flow_box_set_column_spacing(flow, 1);
-    gtk_widget_set_hexpand(GTK_WIDGET(flow), TRUE);
-
-    for (int i = 0; i < NUM_PRESETS; i++) {
-        GtkButton *btn = GTK_BUTTON(gtk_button_new());
-        char cls[32];
-        snprintf(cls, sizeof(cls), "preset-%d", i);
-        gtk_widget_add_css_class(GTK_WIDGET(btn), cls);
-
-        g_object_set_data(G_OBJECT(btn), "color-idx", GINT_TO_POINTER(i));
-        g_signal_connect(btn, "clicked", G_CALLBACK(on_preset_clicked), ctrl);
-        gtk_flow_box_append(flow, GTK_WIDGET(btn));
-    }
-
-    /* Load preset color CSS */
-    {
-        GString *css = g_string_new("");
-        for (int i = 0; i < NUM_PRESETS; i++) {
-            g_string_append_printf(css,
-                ".preset-%d { background: #%02x%02x%02x; min-width: 14px; "
-                "min-height: 14px; padding: 0; border-radius: 2px; }\n",
-                i, preset_colors[i][0], preset_colors[i][1], preset_colors[i][2]);
-        }
-        GtkCssProvider *prov = gtk_css_provider_new();
-        gtk_css_provider_load_from_string(prov, css->str);
-        gtk_style_context_add_provider_for_display(
-            gdk_display_get_default(), GTK_STYLE_PROVIDER(prov),
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-        g_object_unref(prov);
-        g_string_free(css, TRUE);
-    }
-    gtk_box_append(bottom, GTK_WIDGET(flow));
-
-    gtk_box_append(box, GTK_WIDGET(bottom));
-
-    /* Sync initial preview */
-    sync_color_from_hsv(ctrl);
-
-    return GTK_WIDGET(box);
-}
-
-/* ===== SLIDERS (compact, half-width side by side) ===== */
+/* ===== SLIDERS ===== */
 
 static GtkWidget *create_slider(const char *label_text, double min, double max,
                                  double value, double step, GtkScale **out)
@@ -373,18 +266,6 @@ static GtkWidget *create_slider(const char *label_text, double min, double max,
     gtk_widget_set_hexpand(GTK_WIDGET(box), TRUE);
     *out = scale;
     return GTK_WIDGET(box);
-}
-
-/* Two sliders side by side in one row */
-static GtkWidget *create_slider_pair(const char *label1, double min1, double max1,
-                                      double val1, double step1, GtkScale **out1,
-                                      const char *label2, double min2, double max2,
-                                      double val2, double step2, GtkScale **out2)
-{
-    GtkBox *row = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8));
-    gtk_box_append(row, create_slider(label1, min1, max1, val1, step1, out1));
-    gtk_box_append(row, create_slider(label2, min2, max2, val2, step2, out2));
-    return GTK_WIDGET(row);
 }
 
 /* ===== SEND / STOP with loading animation ===== */
@@ -492,33 +373,135 @@ static void clear_params(F87Controls *ctrl)
     ctrl->preview_swatch = NULL;
 }
 
+/* Left column: sliders + toggles. Right column: color picker. */
+static GtkWidget *build_split_layout(F87Controls *ctrl, gboolean show_colorful)
+{
+    GtkBox *row = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8));
+
+    /* Left: sliders stacked vertically */
+    GtkBox *left = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 4));
+    gtk_widget_set_hexpand(GTK_WIDGET(left), TRUE);
+
+    gtk_box_append(left, create_slider("Prk", 1, 4, 3, 1, &ctrl->brightness_scale));
+    gtk_box_append(left, create_slider("Hiz", 0, 4, 2, 1, &ctrl->speed_scale));
+
+    if (show_colorful) {
+        GtkBox *cf_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4));
+        GtkLabel *cf_label = GTK_LABEL(gtk_label_new("Renkli"));
+        gtk_widget_set_opacity(GTK_WIDGET(cf_label), 0.7);
+        gtk_box_append(cf_box, GTK_WIDGET(cf_label));
+        ctrl->colorful_switch = GTK_SWITCH(gtk_switch_new());
+        gtk_widget_set_margin_start(GTK_WIDGET(ctrl->colorful_switch), 4);
+        gtk_box_append(cf_box, GTK_WIDGET(ctrl->colorful_switch));
+        gtk_box_append(left, GTK_WIDGET(cf_box));
+    }
+
+    /* Hex input + preview under sliders */
+    GtkBox *hex_row = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4));
+    GtkLabel *hash = GTK_LABEL(gtk_label_new("#"));
+    gtk_widget_set_opacity(GTK_WIDGET(hash), 0.7);
+    gtk_box_append(hex_row, GTK_WIDGET(hash));
+
+    ctrl->hex_entry = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_max_length(ctrl->hex_entry, 6);
+    gtk_widget_set_size_request(GTK_WIDGET(ctrl->hex_entry), 70, -1);
+    char hex[8];
+    snprintf(hex, sizeof(hex), "%02X%02X%02X",
+             ctrl->selected_color[0], ctrl->selected_color[1], ctrl->selected_color[2]);
+    gtk_editable_set_text(GTK_EDITABLE(ctrl->hex_entry), hex);
+    g_signal_connect(ctrl->hex_entry, "activate", G_CALLBACK(on_hex_activate), ctrl);
+    gtk_box_append(hex_row, GTK_WIDGET(ctrl->hex_entry));
+
+    ctrl->preview_swatch = gtk_drawing_area_new();
+    gtk_widget_set_size_request(ctrl->preview_swatch, 24, 24);
+    gtk_widget_add_css_class(ctrl->preview_swatch, "color-preview");
+    gtk_box_append(hex_row, ctrl->preview_swatch);
+
+    gtk_box_append(left, GTK_WIDGET(hex_row));
+
+    /* Preset swatches under hex */
+    GtkFlowBox *flow = GTK_FLOW_BOX(gtk_flow_box_new());
+    gtk_flow_box_set_max_children_per_line(flow, 12);
+    gtk_flow_box_set_selection_mode(flow, GTK_SELECTION_NONE);
+    gtk_flow_box_set_row_spacing(flow, 1);
+    gtk_flow_box_set_column_spacing(flow, 1);
+
+    for (int i = 0; i < NUM_PRESETS; i++) {
+        GtkButton *btn = GTK_BUTTON(gtk_button_new());
+        char cls[32];
+        snprintf(cls, sizeof(cls), "preset-%d", i);
+        gtk_widget_add_css_class(GTK_WIDGET(btn), cls);
+        g_object_set_data(G_OBJECT(btn), "color-idx", GINT_TO_POINTER(i));
+        g_signal_connect(btn, "clicked", G_CALLBACK(on_preset_clicked), ctrl);
+        gtk_flow_box_append(flow, GTK_WIDGET(btn));
+    }
+
+    /* Load preset color CSS (idempotent — CSS class names are static) */
+    {
+        GString *pcss = g_string_new("");
+        for (int i = 0; i < NUM_PRESETS; i++) {
+            g_string_append_printf(pcss,
+                ".preset-%d { background: #%02x%02x%02x; min-width: 14px; "
+                "min-height: 14px; padding: 0; border-radius: 2px; }\n",
+                i, preset_colors[i][0], preset_colors[i][1], preset_colors[i][2]);
+        }
+        GtkCssProvider *pprov = gtk_css_provider_new();
+        gtk_css_provider_load_from_string(pprov, pcss->str);
+        gtk_style_context_add_provider_for_display(
+            gdk_display_get_default(), GTK_STYLE_PROVIDER(pprov),
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        g_object_unref(pprov);
+        g_string_free(pcss, TRUE);
+    }
+
+    gtk_box_append(left, GTK_WIDGET(flow));
+
+    gtk_box_append(row, GTK_WIDGET(left));
+
+    /* Right: SV area + hue slider (compact, no hex/presets) */
+    GtkBox *right = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 2));
+
+    ctrl->sv_area = GTK_DRAWING_AREA(gtk_drawing_area_new());
+    gtk_drawing_area_set_content_width(ctrl->sv_area, SV_SIZE);
+    gtk_drawing_area_set_content_height(ctrl->sv_area, SV_SIZE);
+    gtk_widget_set_size_request(GTK_WIDGET(ctrl->sv_area), SV_SIZE, SV_SIZE);
+    gtk_drawing_area_set_draw_func(ctrl->sv_area, sv_draw, ctrl, NULL);
+    gtk_widget_set_cursor_from_name(GTK_WIDGET(ctrl->sv_area), "crosshair");
+
+    GtkGesture *click = gtk_gesture_click_new();
+    g_signal_connect(click, "pressed", G_CALLBACK(sv_pressed), ctrl);
+    g_signal_connect(click, "released", G_CALLBACK(sv_released), ctrl);
+    gtk_widget_add_controller(GTK_WIDGET(ctrl->sv_area), GTK_EVENT_CONTROLLER(click));
+
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "motion", G_CALLBACK(sv_motion), ctrl);
+    gtk_widget_add_controller(GTK_WIDGET(ctrl->sv_area), motion);
+
+    gtk_box_append(right, GTK_WIDGET(ctrl->sv_area));
+
+    ctrl->hue_scale = GTK_SCALE(gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
+                                                           0, 359, 1));
+    gtk_range_set_value(GTK_RANGE(ctrl->hue_scale), ctrl->hue);
+    gtk_scale_set_draw_value(ctrl->hue_scale, FALSE);
+    gtk_widget_add_css_class(GTK_WIDGET(ctrl->hue_scale), "hue-slider");
+    g_signal_connect(ctrl->hue_scale, "value-changed", G_CALLBACK(on_hue_changed), ctrl);
+    gtk_box_append(right, GTK_WIDGET(ctrl->hue_scale));
+
+    gtk_box_append(row, GTK_WIDGET(right));
+
+    sync_color_from_hsv(ctrl);
+
+    return GTK_WIDGET(row);
+}
+
 static void build_hw_controls(F87Controls *ctrl)
 {
-    /* Brightness + Speed side by side */
-    gtk_box_append(ctrl->params_box,
-                   create_slider_pair("Prk", 1, 4, 3, 1, &ctrl->brightness_scale,
-                                      "Hiz", 0, 4, 2, 1, &ctrl->speed_scale));
-
-    /* Color picker */
-    gtk_box_append(ctrl->params_box, create_color_picker(ctrl));
-
-    /* Colorful toggle */
-    GtkBox *cf_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4));
-    GtkLabel *cf_label = GTK_LABEL(gtk_label_new("Renkli"));
-    gtk_widget_set_size_request(GTK_WIDGET(cf_label), 40, -1);
-    gtk_widget_set_opacity(GTK_WIDGET(cf_label), 0.7);
-    gtk_box_append(cf_box, GTK_WIDGET(cf_label));
-    ctrl->colorful_switch = GTK_SWITCH(gtk_switch_new());
-    gtk_box_append(cf_box, GTK_WIDGET(ctrl->colorful_switch));
-    gtk_box_append(ctrl->params_box, GTK_WIDGET(cf_box));
+    gtk_box_append(ctrl->params_box, build_split_layout(ctrl, TRUE));
 }
 
 static void build_sw_controls(F87Controls *ctrl)
 {
-    gtk_box_append(ctrl->params_box,
-                   create_slider_pair("Prk", 1, 4, 3, 1, &ctrl->brightness_scale,
-                                      "Hiz", 0, 4, 2, 1, &ctrl->speed_scale));
-    gtk_box_append(ctrl->params_box, create_color_picker(ctrl));
+    gtk_box_append(ctrl->params_box, build_split_layout(ctrl, FALSE));
 }
 
 static void build_music_controls(F87Controls *ctrl)
