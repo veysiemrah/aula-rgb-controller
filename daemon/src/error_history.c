@@ -27,7 +27,8 @@ int f87d_error_ring_get_all(f87d_error_ring_t *ring,
 {
     pthread_mutex_lock(&ring->lock);
     int n = ring->count < max_out ? ring->count : max_out;
-    int start = (ring->head - ring->count + F87D_ERROR_RING_SIZE) % F87D_ERROR_RING_SIZE;
+    /* Return the newest n entries, oldest first within that window */
+    int start = (ring->head - n + F87D_ERROR_RING_SIZE) % F87D_ERROR_RING_SIZE;
     for (int i = 0; i < n; i++) {
         int idx = (start + i) % F87D_ERROR_RING_SIZE;
         memcpy(&out[i], &ring->entries[idx], sizeof(f87_log_entry_t));
