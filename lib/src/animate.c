@@ -389,8 +389,14 @@ int f87_anim_set_effect(f87_anim_ctx_t *ctx, f87_sw_effect_id effect_id)
     ctx->effect_ctx.effect_data = NULL;
 
     ctx->active_effect = new_effect;
-    if (new_effect->init)
-        new_effect->init(&ctx->effect_ctx);
+    if (new_effect->init) {
+        int rc = new_effect->init(&ctx->effect_ctx);
+        if (rc < 0) {
+            ctx->active_effect = NULL;
+            pthread_mutex_unlock(&ctx->effect_mutex);
+            return rc;
+        }
+    }
 
     pthread_mutex_unlock(&ctx->effect_mutex);
     return F87_OK;
