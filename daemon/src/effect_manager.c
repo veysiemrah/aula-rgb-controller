@@ -1,0 +1,156 @@
+#include "effect_manager.h"
+#include <string.h>
+#include <stdio.h>
+
+void f87d_effmgr_init(f87d_effect_manager_t *mgr)
+{
+    memset(mgr, 0, sizeof(*mgr));
+    mgr->category = F87D_CAT_NONE;
+    mgr->effect_id = -1;
+}
+
+void f87d_effmgr_destroy(f87d_effect_manager_t *mgr)
+{
+    f87d_effmgr_stop(mgr);
+}
+
+static void stop_anim(f87d_effect_manager_t *mgr)
+{
+    if (mgr->anim) {
+        f87_anim_stop(mgr->anim);
+        mgr->anim = NULL;
+    }
+}
+
+int f87d_effmgr_set_hw(f87d_effect_manager_t *mgr, f87_device *dev,
+                        int effect_id, uint8_t brightness, uint8_t speed,
+                        uint8_t colorful, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (!dev) return -1;
+
+    stop_anim(mgr);
+
+    f87_effect effect = {0};
+    effect.mode = (f87_mode)effect_id;
+    effect.brightness = brightness;
+    effect.speed = speed;
+    effect.colorful = colorful;
+    effect.color1 = (f87_color){r, g, b};
+
+    int rc = f87_set_effect(dev, &effect);
+    if (rc < 0) return rc;
+
+    mgr->category = F87D_CAT_HW;
+    mgr->effect_id = effect_id;
+    mgr->brightness = brightness;
+    mgr->speed = speed;
+    mgr->color[0] = r;
+    mgr->color[1] = g;
+    mgr->color[2] = b;
+    return 0;
+}
+
+int f87d_effmgr_set_sw(f87d_effect_manager_t *mgr, f87_device *dev,
+                        int effect_id, uint8_t brightness, uint8_t speed,
+                        uint8_t r, uint8_t g, uint8_t b, int fps)
+{
+    if (!dev) return -1;
+
+    stop_anim(mgr);
+
+    f87_anim_config_t config = {
+        .color = {r, g, b},
+        .brightness = brightness,
+        .speed = speed,
+        .fps = fps,
+    };
+
+    mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+    if (!mgr->anim) return -1;
+
+    mgr->category = F87D_CAT_SW;
+    mgr->effect_id = effect_id;
+    mgr->brightness = brightness;
+    mgr->speed = speed;
+    mgr->color[0] = r;
+    mgr->color[1] = g;
+    mgr->color[2] = b;
+    return 0;
+}
+
+int f87d_effmgr_set_music(f87d_effect_manager_t *mgr, f87_device *dev,
+                           int effect_id, uint8_t brightness,
+                           uint8_t r, uint8_t g, uint8_t b, double gain)
+{
+    if (!dev) return -1;
+
+    stop_anim(mgr);
+
+    f87_anim_config_t config = {
+        .color = {r, g, b},
+        .brightness = brightness,
+        .speed = 2,
+        .audio_source = F87_AUDIO_MONITOR,
+        .gain = (float)gain,
+    };
+
+    mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+    if (!mgr->anim) return -1;
+
+    mgr->category = F87D_CAT_MUSIC;
+    mgr->effect_id = effect_id;
+    mgr->brightness = brightness;
+    mgr->color[0] = r;
+    mgr->color[1] = g;
+    mgr->color[2] = b;
+    return 0;
+}
+
+int f87d_effmgr_set_sensor(f87d_effect_manager_t *mgr, f87_device *dev,
+                            const char *profile, const char *config_path)
+{
+    if (!dev) return -1;
+
+    stop_anim(mgr);
+
+    f87_anim_config_t config = {
+        .brightness = 3,
+        .speed = 2,
+        .sensor_profile = profile,
+        .sensor_config_path = config_path,
+    };
+
+    mgr->anim = f87_anim_start(dev, F87_SW_SENSOR, &config);
+    if (!mgr->anim) return -1;
+
+    mgr->category = F87D_CAT_SENSOR;
+    mgr->effect_id = F87_SW_SENSOR;
+    return 0;
+}
+
+int f87d_effmgr_stop(f87d_effect_manager_t *mgr)
+{
+    stop_anim(mgr);
+    mgr->category = F87D_CAT_NONE;
+    mgr->effect_id = -1;
+    return 0;
+}
+
+const char *f87d_effmgr_category_str(f87d_effect_category_t cat)
+{
+    switch (cat) {
+    case F87D_CAT_HW:     return "hw";
+    case F87D_CAT_SW:     return "sw";
+    case F87D_CAT_MUSIC:  return "music";
+    case F87D_CAT_SENSOR: return "sensor";
+    default:              return "";
+    }
+}
+
+bool f87d_effmgr_has_sw_running(const f87d_effect_manager_t *mgr)
+{
+    return mgr->anim != NULL &&
+           (mgr->category == F87D_CAT_SW ||
+            mgr->category == F87D_CAT_MUSIC ||
+            mgr->category == F87D_CAT_SENSOR);
+}
