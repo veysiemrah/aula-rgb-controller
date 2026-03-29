@@ -4,24 +4,27 @@ Aula F87 TK keyboard RGB lighting control for Linux. Reverse-engineered USB HID 
 
 ## Architecture
 
-Three-layer design:
+Four-layer design:
 - **libf87** (`lib/`) — shared C library, abstracts USB HID protocol via libusb
   - **animate** — software animation engine: thread management, frame loop, effect dispatch
   - **audio/spectrum** — PulseAudio capture, KissFFT analysis, beat detection (optional, BUILD_AUDIO)
-- **f87ctl** (`cli/`) — command-line tool (test/development)
-- **f87control** (`gui/`) — GTK4 + libadwaita GUI (primary user interface)
+  - **client** — D-Bus proxy client for daemon communication (sd-bus)
+- **f87d** (`daemon/`) — D-Bus daemon, owns USB access and effect threads
+  - Session bus (`org.f87.Control`), auto-activation, hotplug polling
+  - Idle timeout (5min, disabled during SW effects)
+- **f87ctl** (`cli/`) — command-line tool (daemon mode default, `--direct` for USB bypass)
+- **f87control** (`gui/`) — GTK4 + libadwaita GUI (communicates via daemon)
   - Sidebar layout with HW/SW/music/sensor effect categories
   - 88-key keyboard preview (cairo), dynamic control panel, color palette
-  - Device auto-detection, effect start/stop, error status bar
 
 ## Build
 
 ```bash
-sudo apt install libusb-1.0-0-dev libjson-c-dev libpulse-dev libgtk-4-dev libadwaita-1-dev cmake build-essential  # Debian/Ubuntu
-mkdir build && cd build && cmake .. -DBUILD_GUI=OFF && make
+sudo apt install libusb-1.0-0-dev libjson-c-dev libpulse-dev libsystemd-dev libgtk-4-dev libadwaita-1-dev cmake build-essential  # Debian/Ubuntu
+mkdir build && cd build && cmake .. && make
 ```
 
-For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
+Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon)
 
 ## USB Protocol (Confirmed via USB Capture + Hardware Scan 2026-03-28)
 
@@ -92,7 +95,16 @@ For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
 - `gui/src/sidebar.c` — effect category list
 - `gui/src/controls.c` — dynamic control panel (sliders, color, dropdowns)
 - `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget
-- `gui/src/app_state.c` — device connection, effect lifecycle
+- `gui/src/app_state.c` — daemon client connection, effect lifecycle
+- `daemon/src/main.c` — daemon entry point, sd-bus event loop
+- `daemon/src/dbus_interface.c` — D-Bus method/signal/property handlers
+- `daemon/src/device_manager.c` — hotplug monitoring, auto-reconnect
+- `daemon/src/effect_manager.c` — effect lifecycle management
+- `daemon/src/idle_monitor.c` — idle timeout (5min, disabled during SW effects)
+- `lib/include/f87/client.h` — D-Bus proxy client API
+- `lib/src/client.c` — D-Bus proxy implementation
+- `dbus/org.f87.Control.service` — D-Bus auto-activation
+- `systemd/f87d.service` — systemd user service unit
 - `tools/protocol_notes.md` — full protocol documentation
 - `tools/*.pcap` — USB capture files from Windows
 - `tools/*.py` — capture analysis scripts
@@ -111,32 +123,23 @@ sudo usermod -aG input $USER  # then logout/login
 # Run tests (no hardware needed)
 cd build && ctest --output-on-failure
 
-# Hardware test
-./f87ctl list
+# Start daemon (or use systemd)
+./f87d &
+# Or: systemctl --user enable --now f87d
+
+# CLI uses daemon by default
 ./f87ctl info
-./f87ctl color ff0000
 ./f87ctl effect wave --brightness 4 --speed 2
-./f87ctl effect reactive ff0000
 ./f87ctl brightness 3
-./f87ctl off
-./f87ctl raw send "06 82 01 00 01 00 06"
-
-# Software animation test (foreground, Ctrl+C to stop)
 ./f87ctl animate fire
-./f87ctl animate plasma --speed 3
-./f87ctl animate lightning 8800ff
-./f87ctl animate explode           # type to see explosions
-./f87ctl animate typewriter         # type to see heat trails
-
-# Music reactive (play music first, Ctrl+C to stop)
 ./f87ctl music spectrum
-./f87ctl music beat ff0000
-./f87ctl music vu
+./f87ctl stop
+./f87ctl off
 
-# Sensor monitoring
-./f87ctl animate sensor
-./f87ctl animate sensor --profile gamer
-./f87ctl animate sensor --config configs/sensor/system.json
+# Direct USB mode (bypass daemon, for debug)
+./f87ctl --direct info
+./f87ctl --direct effect wave
+./f87ctl --direct raw send "06 82 01 00 01 00 06"
 ```
 
 ## Project Status
@@ -155,7 +158,15 @@ cd build && ctest --output-on-failure
   - Sidebar + keyboard preview + dynamic controls + color palette
   - All effect categories: HW, SW, music, sensor
   - Device auto-detection, error handling, status bar
-- Faz 6: Daemon mode, profiles, wireless support (not started)
+- Faz 6.1: Daemon mode (complete)
+  - D-Bus daemon (sd-bus) with auto-activation and systemd user service
+  - Device manager with 5s hotplug polling
+  - Effect manager (HW/SW/music/sensor)
+  - Idle timeout (5min, disabled during SW effects)
+  - Proxy client library (client.h/client.c)
+  - CLI/GUI migrated to daemon
+- Faz 6.2: Profiles (not started)
+- Faz 6.3: Wireless support (not started)
 
 ## Known Limitations (Firmware)
 
