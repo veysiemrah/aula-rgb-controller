@@ -75,6 +75,9 @@ static int call_bool(f87_client *c, const char *method,
     r = sd_bus_call(c->bus, msg, 0, &error, &reply);
     sd_bus_message_unref(msg);
     if (r < 0) {
+        F87_ERROR(F87_SRC_DBUS, "D-Bus call %s failed: %s (%s)",
+                  method, error.name ? error.name : "?",
+                  error.message ? error.message : "?");
         sd_bus_error_free(&error);
         return -1;
     }
@@ -108,7 +111,7 @@ int f87_client_set_music_effect(f87_client *client, int effect_id,
                                  uint8_t brightness,
                                  uint8_t r, uint8_t g, uint8_t b, double gain)
 {
-    return call_bool(client, "SetMusicEffect", "iyyyd",
+    return call_bool(client, "SetMusicEffect", "iyyyyd",
                      (int32_t)effect_id, brightness, r, g, b, gain);
 }
 

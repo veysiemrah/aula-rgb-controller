@@ -1,4 +1,5 @@
 #include "animate_internal.h"
+#include "f87/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -221,10 +222,10 @@ static void *anim_thread_func(void *arg)
 f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
                                 const f87_anim_config_t *config)
 {
-    if (!dev) return NULL;
+    if (!dev) { F87_ERROR(F87_SRC_EFFECT, "anim_start: dev is NULL"); return NULL; }
 
     const f87_sw_effect_t *effect = f87_sw_find_effect(effect_id);
-    if (!effect) return NULL;
+    if (!effect) { F87_ERROR(F87_SRC_EFFECT, "anim_start: effect %d not found", effect_id); return NULL; }
 
     f87_anim_ctx_t *ctx = calloc(1, sizeof(*ctx));
     if (!ctx) return NULL;
@@ -265,6 +266,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
     if (effect->init) {
         int rc = effect->init(&ctx->effect_ctx);
         if (rc < 0) {
+            F87_ERROR(F87_SRC_EFFECT, "anim_start: effect init failed (%d)", rc);
             pthread_mutex_destroy(&ctx->effect_mutex);
             free(ctx);
             return NULL;
@@ -304,6 +306,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
         extern int f87_audio_thread_start(f87_anim_ctx_t *ctx);
         int rc = f87_audio_thread_start(ctx);
         if (rc < 0) {
+            F87_ERROR(F87_SRC_AUDIO, "anim_start: audio thread failed");
             free(ctx->audio_ring);
             if (effect->destroy) effect->destroy(&ctx->effect_ctx);
             if (ctx->input_fd >= 0) close(ctx->input_fd);

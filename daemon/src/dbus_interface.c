@@ -106,7 +106,7 @@ static int method_set_music_effect(sd_bus_message *msg, void *userdata,
     uint8_t brightness, r, g, b;
     double gain;
 
-    int rc = sd_bus_message_read(msg, "iyyyd", &effect_id, &brightness,
+    int rc = sd_bus_message_read(msg, "iyyyyd", &effect_id, &brightness,
                                   &r, &g, &b, &gain);
     if (rc < 0)
         return sd_bus_error_set_errno(error, -rc);
@@ -711,7 +711,7 @@ static const sd_bus_vtable f87_vtable[] = {
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetSwEffect", "iyyyyyi", "b", method_set_sw_effect,
                   SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("SetMusicEffect", "iyyyd", "b", method_set_music_effect,
+    SD_BUS_METHOD("SetMusicEffect", "iyyyyd", "b", method_set_music_effect,
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetSensorEffect", "ss", "b", method_set_sensor_effect,
                   SD_BUS_VTABLE_UNPRIVILEGED),
