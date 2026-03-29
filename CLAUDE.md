@@ -147,6 +147,9 @@ cd build && ctest --output-on-failure
 ./f87ctl sidelight 1
 ./f87ctl batterylight 0
 
+# Battery / wireless info
+./f87ctl battery
+
 # Direct USB mode (bypass daemon, for debug)
 ./f87ctl --direct info
 ./f87ctl --direct effect wave
@@ -181,7 +184,12 @@ cd build && ctest --output-on-failure
   - Last-state restore on daemon startup
   - Side/battery light control via D-Bus
   - CLI profile save/load/delete/list commands
-- Faz 6.3: Wireless support (not started)
+- Faz 6.3: Wireless support (complete)
+  - Device scanning matches both wired (258A:010C) and wireless (3554:FA09)
+  - is_wireless flag in device_info, IsWireless D-Bus property
+  - BatteryLevel D-Bus property and GetBatteryLevel method
+  - CLI shows connection type and battery in `info` command
+  - Battery query protocol not yet RE'd (returns -1 for wireless)
 
 ## Known Limitations (Firmware)
 
