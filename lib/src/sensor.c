@@ -333,7 +333,7 @@ static void *sensor_thread_func(void *arg)
 int f87_sensor_thread_start(f87_sensor_ctx_t *sctx)
 {
     atomic_store(&sctx->running, true);
-    pthread_mutex_init(&sctx->data.mutex, NULL);
+    /* mutex is already initialized by sensor_effect_init */
 
     int rc = pthread_create(&sctx->thread, NULL, sensor_thread_func, sctx);
     if (rc != 0) {

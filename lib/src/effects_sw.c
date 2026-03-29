@@ -525,6 +525,8 @@ static int sensor_effect_init(f87_effect_ctx_t *ctx)
     sensor_effect_data_t *sd = calloc(1, sizeof(sensor_effect_data_t));
     if (!sd) return F87_ERR_NOMEM;
 
+    pthread_mutex_init(&sd->sensor_ctx.data.mutex, NULL);
+
     const f87_key_info *layout = f87_key_layout;
     int key_count = F87_KEY_COUNT;
 
@@ -649,6 +651,8 @@ static void sensor_effect_destroy(f87_effect_ctx_t *ctx)
 
     if (sd->sensor_ctx.active_count > 0)
         f87_sensor_thread_stop(&sd->sensor_ctx);
+
+    pthread_mutex_destroy(&sd->sensor_ctx.data.mutex);
 
     for (int i = 0; i < sd->profile.mapping_count; i++)
         free(sd->profile.mappings[i].sensor_name);
