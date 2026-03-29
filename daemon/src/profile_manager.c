@@ -256,6 +256,7 @@ int f87d_profile_list(char ***names)
 
     int count = 0, cap = 16;
     char **list = malloc((size_t)cap * sizeof(char *));
+    if (!list) { closedir(d); *names = NULL; return 0; }
 
     struct dirent *ent;
     while ((ent = readdir(d)) != NULL) {
@@ -264,7 +265,9 @@ int f87d_profile_list(char ***names)
             continue;
         if (count >= cap) {
             cap *= 2;
-            list = realloc(list, (size_t)cap * sizeof(char *));
+            char **tmp = realloc(list, (size_t)cap * sizeof(char *));
+            if (!tmp) break;
+            list = tmp;
         }
         list[count] = strndup(ent->d_name, len - 5);
         count++;

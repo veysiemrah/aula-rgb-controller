@@ -316,12 +316,15 @@ int f87_client_list_profiles(f87_client *client, char ***names, int *count)
 
     int n = 0, cap = 16;
     char **list = malloc((size_t)cap * sizeof(char *));
+    if (!list) { sd_bus_message_unref(reply); sd_bus_error_free(&error); return -1; }
 
     const char *name_str = NULL;
     while (sd_bus_message_read(reply, "s", &name_str) > 0) {
         if (n >= cap) {
             cap *= 2;
-            list = realloc(list, (size_t)cap * sizeof(char *));
+            char **tmp = realloc(list, (size_t)cap * sizeof(char *));
+            if (!tmp) break;
+            list = tmp;
         }
         list[n++] = strdup(name_str);
     }
