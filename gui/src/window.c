@@ -2,6 +2,7 @@
 #include "sidebar.h"
 #include "app_state.h"
 #include "controls.h"
+#include "keyboard_view.h"
 #include <stdio.h>
 
 struct _F87Window {
@@ -12,6 +13,7 @@ struct _F87Window {
     GtkLabel *status_label;
     f87_app_state_t app_state;
     F87Controls *controls;
+    F87KeyboardView *keyboard;
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
@@ -60,17 +62,10 @@ static void f87_window_init(F87Window *self)
     gtk_widget_set_margin_top(GTK_WIDGET(right_box), 12);
     gtk_widget_set_margin_bottom(GTK_WIDGET(right_box), 8);
 
-    /* Keyboard preview placeholder */
-    GtkBox *kb_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-    gtk_widget_add_css_class(GTK_WIDGET(kb_box), "keyboard-preview");
-    gtk_widget_set_vexpand(GTK_WIDGET(kb_box), TRUE);
-    GtkLabel *kb_label = GTK_LABEL(gtk_label_new("Klavye Onizleme"));
-    gtk_widget_set_opacity(GTK_WIDGET(kb_label), 0.5);
-    gtk_widget_set_valign(GTK_WIDGET(kb_label), GTK_ALIGN_CENTER);
-    gtk_widget_set_halign(GTK_WIDGET(kb_label), GTK_ALIGN_CENTER);
-    gtk_widget_set_vexpand(GTK_WIDGET(kb_label), TRUE);
-    gtk_box_append(kb_box, GTK_WIDGET(kb_label));
-    gtk_box_append(right_box, GTK_WIDGET(kb_box));
+    /* Keyboard preview */
+    self->keyboard = f87_keyboard_view_new();
+    gtk_widget_set_vexpand(GTK_WIDGET(self->keyboard), TRUE);
+    gtk_box_append(right_box, GTK_WIDGET(self->keyboard));
 
     /* Control panel (populated on effect selection) */
     self->controls = f87_controls_new(&self->app_state, on_status_update, self);
