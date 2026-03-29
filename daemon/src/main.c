@@ -15,10 +15,12 @@
 #include "device_manager.h"
 #include "effect_manager.h"
 #include "dbus_interface.h"
+#include "idle_monitor.h"
 
 static volatile sig_atomic_t g_quit = 0;
 static f87d_device_manager_t g_devmgr;
 static f87d_effect_manager_t g_effmgr;
+static f87d_idle_monitor_t g_idle;
 static f87d_dbus_ctx_t g_dbus_ctx;
 
 static void signal_handler(int sig)
@@ -63,6 +65,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     f87d_effmgr_init(&g_effmgr);
+    f87d_idle_init(&g_idle);
 
     f87d_devmgr_scan(&g_devmgr, &g_dev_cbs);
 
@@ -78,6 +81,7 @@ int main(int argc, char **argv)
         .bus = bus,
         .devmgr = &g_devmgr,
         .effmgr = &g_effmgr,
+        .idle = &g_idle,
     };
 
     r = f87d_dbus_register(bus, &g_dbus_ctx);
@@ -114,6 +118,17 @@ int main(int argc, char **argv)
         if (now_us - last_poll_us >= poll_interval_us) {
             f87d_devmgr_poll(&g_devmgr, &g_dev_cbs);
             last_poll_us = now_us;
+
+            /* Idle timeout: disabled while SW effect running */
+            if (f87d_effmgr_has_sw_running(&g_effmgr)) {
+                f87d_idle_set_enabled(&g_idle, false);
+            } else {
+                f87d_idle_set_enabled(&g_idle, true);
+                if (f87d_idle_check(&g_idle)) {
+                    printf("f87d: idle timeout, exiting\n");
+                    break;
+                }
+            }
         }
 
         r = sd_bus_wait(bus, 1000000);

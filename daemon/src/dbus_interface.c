@@ -12,6 +12,7 @@ static int method_set_effect(sd_bus_message *msg, void *userdata,
                               sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     int32_t effect_id;
     uint8_t brightness, speed, r, g, b;
     int colorful;
@@ -40,6 +41,7 @@ static int method_set_sw_effect(sd_bus_message *msg, void *userdata,
                                  sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     int32_t effect_id, fps;
     uint8_t brightness, speed, r, g, b;
 
@@ -67,6 +69,7 @@ static int method_set_music_effect(sd_bus_message *msg, void *userdata,
                                     sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     int32_t effect_id;
     uint8_t brightness, r, g, b;
     double gain;
@@ -95,6 +98,7 @@ static int method_set_sensor_effect(sd_bus_message *msg, void *userdata,
                                      sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     const char *profile = NULL, *config_path = NULL;
 
     int rc = sd_bus_message_read(msg, "ss", &profile, &config_path);
@@ -121,6 +125,7 @@ static int method_set_brightness(sd_bus_message *msg, void *userdata,
                                   sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     uint8_t level;
 
     int rc = sd_bus_message_read(msg, "y", &level);
@@ -144,6 +149,7 @@ static int method_set_color(sd_bus_message *msg, void *userdata,
                              sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
     uint8_t r, g, b;
 
     int rc = sd_bus_message_read(msg, "yyy", &r, &g, &b);
@@ -169,6 +175,7 @@ static int method_stop(sd_bus_message *msg, void *userdata,
 {
     (void)error;
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
 
     f87d_effmgr_stop(ctx->effmgr);
     f87d_dbus_emit_effect_changed(ctx, -1, "");
@@ -179,6 +186,7 @@ static int method_off(sd_bus_message *msg, void *userdata,
                        sd_bus_error *error)
 {
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
 
     f87d_effmgr_stop(ctx->effmgr);
 
@@ -201,6 +209,7 @@ static int method_rescan(sd_bus_message *msg, void *userdata,
 {
     (void)error;
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
 
     int rc = f87d_devmgr_scan(ctx->devmgr, NULL);
     return sd_bus_reply_method_return(msg, "b", rc == 0);
@@ -211,6 +220,7 @@ static int method_get_status(sd_bus_message *msg, void *userdata,
 {
     (void)error;
     f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
 
     sd_bus_message *reply = NULL;
     int r = sd_bus_message_new_method_return(msg, &reply);

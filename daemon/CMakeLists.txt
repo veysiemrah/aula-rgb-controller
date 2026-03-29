@@ -6,6 +6,7 @@ add_executable(f87d
     src/device_manager.c
     src/effect_manager.c
     src/dbus_interface.c
+    src/idle_monitor.c
 )
 
 target_include_directories(f87d PRIVATE
