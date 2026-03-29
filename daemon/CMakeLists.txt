@@ -5,6 +5,7 @@ add_executable(f87d
     src/main.c
     src/device_manager.c
     src/effect_manager.c
+    src/dbus_interface.c
 )
 
 target_include_directories(f87d PRIVATE

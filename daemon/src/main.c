@@ -13,9 +13,13 @@
 #include <errno.h>
 #include <time.h>
 #include "device_manager.h"
+#include "effect_manager.h"
+#include "dbus_interface.h"
 
 static volatile sig_atomic_t g_quit = 0;
 static f87d_device_manager_t g_devmgr;
+static f87d_effect_manager_t g_effmgr;
+static f87d_dbus_ctx_t g_dbus_ctx;
 
 static void signal_handler(int sig)
 {
@@ -28,12 +32,16 @@ static void on_device_connected(const f87_device_info *info, void *userdata)
     (void)userdata;
     printf("f87d: device connected — %s (%04X:%04X)\n",
            info->product, info->vendor_id, info->product_id);
+    f87d_dbus_emit_device_connected(&g_dbus_ctx, info->product,
+                                     info->vendor_id, info->product_id);
 }
 
 static void on_device_disconnected(void *userdata)
 {
     (void)userdata;
     printf("f87d: device disconnected\n");
+    f87d_effmgr_stop(&g_effmgr);
+    f87d_dbus_emit_device_disconnected(&g_dbus_ctx);
 }
 
 static f87d_device_callbacks_t g_dev_cbs = {
@@ -54,6 +62,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "f87d: failed to init device manager\n");
         return EXIT_FAILURE;
     }
+    f87d_effmgr_init(&g_effmgr);
 
     f87d_devmgr_scan(&g_devmgr, &g_dev_cbs);
 
@@ -61,6 +70,20 @@ int main(int argc, char **argv)
     int r = sd_bus_open_user(&bus);
     if (r < 0) {
         fprintf(stderr, "f87d: session bus: %s\n", strerror(-r));
+        f87d_devmgr_destroy(&g_devmgr);
+        return EXIT_FAILURE;
+    }
+
+    g_dbus_ctx = (f87d_dbus_ctx_t){
+        .bus = bus,
+        .devmgr = &g_devmgr,
+        .effmgr = &g_effmgr,
+    };
+
+    r = f87d_dbus_register(bus, &g_dbus_ctx);
+    if (r < 0) {
+        fprintf(stderr, "f87d: dbus register: %s\n", strerror(-r));
+        sd_bus_unref(bus);
         f87d_devmgr_destroy(&g_devmgr);
         return EXIT_FAILURE;
     }
@@ -98,6 +121,7 @@ int main(int argc, char **argv)
     }
 
     printf("f87d: shutting down\n");
+    f87d_effmgr_destroy(&g_effmgr);
     sd_bus_release_name(bus, "org.f87.Control");
     sd_bus_unref(bus);
     f87d_devmgr_destroy(&g_devmgr);
