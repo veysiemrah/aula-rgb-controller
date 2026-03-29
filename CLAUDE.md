@@ -93,8 +93,9 @@ Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon
 - `gui/src/main.c` — GTK4 GUI entry point
 - `gui/src/window.c` — main window layout (sidebar + paned)
 - `gui/src/sidebar.c` — effect category list
-- `gui/src/controls.c` — dynamic control panel (sliders, color, dropdowns)
-- `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget
+- `gui/src/controls.c` — dynamic control panel (HSV color picker, sliders, dropdowns)
+- `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget (interactive paint mode)
+- `gui/src/preview.c` — live effect preview animation (15fps, matches real algorithms)
 - `gui/src/app_state.c` — daemon client connection, effect lifecycle
 - `daemon/src/main.c` — daemon entry point, sd-bus event loop
 - `daemon/src/dbus_interface.c` — D-Bus method/signal/property handlers
@@ -168,10 +169,14 @@ cd build && ctest --output-on-failure
   - Plugin-based sensor interface with built-in sensors (cpu_temp, cpu_load, gpu_temp, ram_usage)
   - JSON config for key-sensor mappings, color/bar display modes
   - Built-in profiles: developer, gamer, system
-- Faz 5: GTK4 GUI (complete)
-  - Sidebar + keyboard preview + dynamic controls + color palette
-  - All effect categories: HW, SW, music, sensor
-  - Device auto-detection, error handling, status bar
+- Faz 5: GTK4 GUI (complete + enhanced)
+  - Collapsible sidebar categories (GtkExpander)
+  - HSV color picker (SV gradient + hue slider + hex input + presets)
+  - Live keyboard preview animation (15fps, all effects)
+  - Custom per-key paint mode (click keyboard to assign colors)
+  - Compact split layout (sliders left, color picker right)
+  - Loading animation on save, hover effects, auto-reconnect
+  - Reactive effect indicator ("tus basmaya duyarli")
 - Faz 6.1: Daemon mode (complete)
   - D-Bus daemon (sd-bus) with auto-activation and systemd user service
   - Device manager with 5s hotplug polling
@@ -199,6 +204,7 @@ These are hardware/firmware constraints that cannot be resolved in software:
 - **Software-driven animation:** Direct mode (CMD 0x08) works at 30fps after Report 0x3C enable. Config write (cmd 0x04) causes brief LED reset — use CMD 0x08 for smooth animation instead.
 - **Effect IDs 6, 9, 14:** Not present in F87 TK firmware — keyboard skips these IDs.
 - **USB timing:** Commands sent too rapidly (~<200ms apart) can cause keyboard reset. 5ms delay between USB transfers required.
+- **SW animation FPS:** Capped at 25fps to prevent USB reset. Music effects allowed up to 60fps (experimental).
 
 ## Key Layout Quirks
 
