@@ -23,3 +23,9 @@ target_link_libraries(f87d PRIVATE
 target_compile_options(f87d PRIVATE
     ${SYSTEMD_CFLAGS_OTHER}
 )
+
+install(TARGETS f87d DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/dbus/org.f87.Control.service
+        DESTINATION share/dbus-1/services)
+install(FILES ${CMAKE_SOURCE_DIR}/systemd/f87d.service
+        DESTINATION lib/systemd/user)
