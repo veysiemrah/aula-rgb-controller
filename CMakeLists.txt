@@ -36,6 +36,7 @@ add_test(NAME sensor_tests COMMAND test_sensor)
 
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
+option(BUILD_DAEMON "Build the f87d D-Bus daemon" ON)
 
 add_subdirectory(vendor/kissfft)
 add_subdirectory(lib)
@@ -46,4 +47,8 @@ endif()
 
 if(BUILD_GUI)
     add_subdirectory(gui)
+endif()
+
+if(BUILD_DAEMON)
+    add_subdirectory(daemon)
 endif()
