@@ -464,7 +464,7 @@ static int method_save_profile(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.IOError", "Failed to save profile");
 
-    printf("f87d: profile saved: %s\n", name);
+    F87_INFO(F87_SRC_DBUS, "Profile saved: %s", name);
     return sd_bus_reply_method_return(msg, "b", 1);
 }
 
@@ -511,7 +511,7 @@ static int method_load_profile(sd_bus_message *msg, void *userdata,
 
     autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, p.effect_id, p.category);
-    printf("f87d: profile loaded: %s\n", name);
+    F87_INFO(F87_SRC_DBUS, "Profile loaded: %s", name);
     return sd_bus_reply_method_return(msg, "b", 1);
 }
 
@@ -526,7 +526,7 @@ static int method_delete_profile(sd_bus_message *msg, void *userdata,
     if (rc < 0) return sd_bus_error_set_errno(error, -rc);
 
     f87d_profile_delete(name);
-    printf("f87d: profile deleted: %s\n", name);
+    F87_INFO(F87_SRC_DBUS, "Profile deleted: %s", name);
     return sd_bus_reply_method_return(msg, "b", 1);
 }
 

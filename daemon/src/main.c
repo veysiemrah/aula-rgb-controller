@@ -36,8 +36,8 @@ static void signal_handler(int sig)
 static void on_device_connected(const f87_device_info *info, void *userdata)
 {
     (void)userdata;
-    printf("f87d: device connected — %s (%04X:%04X)\n",
-           info->product, info->vendor_id, info->product_id);
+    F87_INFO(F87_SRC_DEVICE, "Device connected: %s (%04X:%04X)",
+             info->product, info->vendor_id, info->product_id);
     f87d_dbus_emit_device_connected(&g_dbus_ctx, info->product,
                                      info->vendor_id, info->product_id);
 }
@@ -45,7 +45,7 @@ static void on_device_connected(const f87_device_info *info, void *userdata)
 static void on_device_disconnected(void *userdata)
 {
     (void)userdata;
-    printf("f87d: device disconnected\n");
+    F87_INFO(F87_SRC_DEVICE, "Device disconnected");
     f87d_effmgr_stop(&g_effmgr);
     f87d_dbus_emit_device_disconnected(&g_dbus_ctx);
 }
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     f87_log_set_callback(f87d_error_ring_log_callback, &g_error_ring);
 
     if (f87d_devmgr_init(&g_devmgr) < 0) {
-        fprintf(stderr, "f87d: failed to init device manager\n");
+        F87_ERROR(F87_SRC_DEVICE, "Failed to init device manager");
         return EXIT_FAILURE;
     }
     f87d_effmgr_init(&g_effmgr);
@@ -82,8 +82,8 @@ int main(int argc, char **argv)
     if (f87d_profile_load_last(&last_profile) == 0) {
         f87_device *dev = f87d_devmgr_get_device(&g_devmgr);
         if (dev) {
-            printf("f87d: restoring last state (%s, effect %d)\n",
-                   last_profile.category, last_profile.effect_id);
+            F87_INFO(F87_SRC_EFFECT, "Restoring last state: %s effect %d",
+                     last_profile.category, last_profile.effect_id);
             if (strcmp(last_profile.category, "hw") == 0 && last_profile.effect_id >= 0) {
                 f87d_effmgr_set_hw(&g_effmgr, dev, last_profile.effect_id,
                                     last_profile.brightness, last_profile.speed,
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
     sd_bus *bus = NULL;
     int r = sd_bus_open_user(&bus);
     if (r < 0) {
-        fprintf(stderr, "f87d: session bus: %s\n", strerror(-r));
+        F87_ERROR(F87_SRC_DBUS, "Session bus: %s", strerror(-r));
         f87d_devmgr_destroy(&g_devmgr);
         return EXIT_FAILURE;
     }
@@ -130,7 +130,7 @@ int main(int argc, char **argv)
 
     r = f87d_dbus_register(bus, &g_dbus_ctx);
     if (r < 0) {
-        fprintf(stderr, "f87d: dbus register: %s\n", strerror(-r));
+        F87_ERROR(F87_SRC_DBUS, "D-Bus register: %s", strerror(-r));
         sd_bus_unref(bus);
         f87d_devmgr_destroy(&g_devmgr);
         return EXIT_FAILURE;
@@ -138,14 +138,14 @@ int main(int argc, char **argv)
 
     r = sd_bus_request_name(bus, "org.f87.Control", 0);
     if (r < 0) {
-        fprintf(stderr, "f87d: bus name: %s\n", strerror(-r));
+        F87_ERROR(F87_SRC_DBUS, "Bus name: %s", strerror(-r));
         sd_bus_unref(bus);
         f87d_devmgr_destroy(&g_devmgr);
         return EXIT_FAILURE;
     }
 
-    printf("f87d: running (device %s)\n",
-           g_devmgr.connected ? "connected" : "not found");
+    F87_INFO(F87_SRC_DBUS, "Running (device %s)",
+             g_devmgr.connected ? "connected" : "not found");
 
     uint64_t last_poll_us = 0;
     const uint64_t poll_interval_us = 5000000; /* 5 seconds */
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
             } else {
                 f87d_idle_set_enabled(&g_idle, true);
                 if (f87d_idle_check(&g_idle)) {
-                    printf("f87d: idle timeout, exiting\n");
+                    F87_INFO(F87_SRC_DBUS, "Idle timeout, exiting");
                     break;
                 }
             }
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
         if (r < 0 && r != -EINTR) break;
     }
 
-    printf("f87d: shutting down\n");
+    F87_INFO(F87_SRC_DBUS, "Shutting down");
     f87d_effmgr_destroy(&g_effmgr);
     sd_bus_release_name(bus, "org.f87.Control");
     sd_bus_unref(bus);
