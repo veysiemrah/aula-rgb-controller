@@ -24,6 +24,8 @@ int f87_app_state_init(f87_app_state_t *state)
                  "Daemon durumu alinamadi");
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
+        f87_client_disconnect(state->client);
+        state->client = NULL;
         return -1;
     }
 

@@ -32,6 +32,8 @@ static void on_status_update(const char *text, gpointer user_data)
         gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
     else if (self->app_state.status == F87_GUI_RUNNING)
         gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-ok");
+    else if (self->app_state.status_level == F87_LOG_WARN)
+        gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-warn");
 }
 
 static void on_effect_selected(const char *category, const char *effect_name,

@@ -623,7 +623,7 @@ static void render_frame(f87_preview_t *p)
     case 1:  render_static(p); break;
     case 2:  render_breathing(p); break;
     case 3:  render_wave(p); break;
-    case 4:  render_rain(p); break;
+    case 4:  render_center_ripple(p); break;
     case 5:  render_rain(p); break;
     case 7:  render_center_ripple(p); break;
     case 8:  render_starlight(p); break;
@@ -659,8 +659,7 @@ static gboolean on_preview_tick(gpointer data)
     f87_preview_t *p = data;
     p->frame++;
     render_frame(p);
-    for (int i = 0; i < KEY_COUNT; i++)
-        f87_keyboard_view_set_key(p->keyboard, i, p->buf[i][0], p->buf[i][1], p->buf[i][2]);
+    f87_keyboard_view_set_all_keys(p->keyboard, p->buf, KEY_COUNT);
     return G_SOURCE_CONTINUE;
 }
 

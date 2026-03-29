@@ -177,6 +177,18 @@ void f87_keyboard_view_clear(F87KeyboardView *view)
     gtk_widget_queue_draw(GTK_WIDGET(view));
 }
 
+void f87_keyboard_view_set_all_keys(F87KeyboardView *view,
+                                     const uint8_t colors[][3], int count)
+{
+    if (count > F87_KEY_COUNT) count = F87_KEY_COUNT;
+    for (int i = 0; i < count; i++) {
+        view->colors[i][0] = colors[i][0];
+        view->colors[i][1] = colors[i][1];
+        view->colors[i][2] = colors[i][2];
+    }
+    gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
 void f87_keyboard_view_set_paint_mode(F87KeyboardView *view, gboolean enabled,
                                        F87KeyPaintCallback cb, gpointer user_data)
 {

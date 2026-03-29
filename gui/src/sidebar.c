@@ -64,6 +64,7 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
     sd->user_data = user_data;
 
     GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    g_object_set_data_full(G_OBJECT(box), "sidebar-data", sd, g_free);
 
     /* HW Effects */
     static const EffectEntry hw[] = {
@@ -94,7 +95,7 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
 
     /* Sensor — special: rows carry sensor-profile data */
     static const EffectEntry se[] = {
-        {"Developer", 106}, {"Gamer", 106}, {"System", 106},
+        {"developer", 106}, {"gamer", 107}, {"system", 108},
         {NULL, 0}
     };
     GtkListBox *se_list = GTK_LIST_BOX(gtk_list_box_new());
