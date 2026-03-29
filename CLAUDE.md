@@ -103,8 +103,11 @@ Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon
 - `daemon/src/effect_manager.c` — effect lifecycle management
 - `daemon/src/idle_monitor.c` — idle timeout (5min, disabled during SW effects)
 - `daemon/src/profile_manager.c` — JSON profile serialize/deserialize, file I/O
+- `lib/include/f87/logger.h` — centralized logging API (5 levels, 6 sources, 2 backends)
+- `lib/src/logger.c` — logger implementation (stderr + systemd journal, atomic level, callback)
 - `lib/include/f87/client.h` — D-Bus proxy client API
 - `lib/src/client.c` — D-Bus proxy implementation
+- `daemon/src/error_history.h` / `error_history.c` — 128-entry mutex ring buffer for WARN/ERROR
 - `dbus/org.f87.Control.service` — D-Bus auto-activation
 - `systemd/f87d.service` — systemd user service unit
 - `tools/protocol_notes.md` — full protocol documentation
@@ -195,6 +198,15 @@ cd build && ctest --output-on-failure
   - BatteryLevel D-Bus property and GetBatteryLevel method
   - CLI shows connection type and battery in `info` command
   - Battery query protocol not yet RE'd (returns -1 for wireless)
+- Faz 7: Error collection system (complete)
+  - Centralized 5-level logging: TRACE, DEBUG, INFO, WARN, ERROR
+  - 6 log sources: USB, AUDIO, DBUS, DEVICE, EFFECT, GUI
+  - stderr backend (CLI/GUI) + systemd journal backend (daemon)
+  - `F87_LOG_LEVEL` env var + `SetLogLevel` D-Bus runtime control
+  - 128-entry error ring buffer (WARN+ERROR, daemon)
+  - D-Bus: GetErrorHistory, ClearErrorHistory, SetLogLevel, GetLogLevel
+  - GUI status bar color-coded (green=running, red=error)
+  - All fprintf(stderr)/printf migrated to F87_LOG macros
 
 ## Known Limitations (Firmware)
 
@@ -228,3 +240,5 @@ on the wrong row. Consider normalizing positions if exact physical layout is nee
 - Public API in `lib/include/f87/`, internal in `lib/src/`
 - LED indices: non-sequential, mapped via `f87_led_index[]` array from KB.ini
 - Per-effect parameters at config offset 64 + 2 × effect_id
+- Logging: use `F87_TRACE/DEBUG/INFO/WARN/ERROR(source, fmt, ...)` macros, never raw fprintf
+- Logger init: daemon uses `F87_LOG_JOURNAL`, CLI/GUI use `F87_LOG_STDERR`
