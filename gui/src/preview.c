@@ -184,32 +184,63 @@ static void render_center_ripple(f87_preview_t *p)
 }
 
 /* SW effects */
+/* Doom fire algorithm — same as the real effect in effects_sw.c */
+#define FIRE_ROWS 6
+#define FIRE_COLS 22
+
 static void render_fire(f87_preview_t *p)
 {
+    /* Use buf as heat storage via static — preview is single-instance */
+    static float heat[FIRE_ROWS][FIRE_COLS];
+    static int initialized = 0;
+    if (!initialized) { memset(heat, 0, sizeof(heat)); initialized = 1; }
+
+    float decay_base = 0.15f - (float)p->speed * 0.02f;
+    if (decay_base < 0.05f) decay_base = 0.05f;
+
+    /* Bottom row = max heat */
+    for (int c = 0; c < FIRE_COLS; c++)
+        heat[FIRE_ROWS - 1][c] = 1.0f;
+
+    /* Propagate upward */
+    for (int r = 0; r < FIRE_ROWS - 1; r++) {
+        for (int c = 0; c < FIRE_COLS; c++) {
+            int src_c = c + (int)(rng_next(&p->rng) % 3) - 1;
+            if (src_c < 0) src_c = 0;
+            if (src_c >= FIRE_COLS) src_c = FIRE_COLS - 1;
+
+            float decay = decay_base * (float)(rng_next(&p->rng) % 100) / 100.0f;
+            heat[r][c] = heat[r + 1][src_c] - decay;
+            if (heat[r][c] < 0.0f) heat[r][c] = 0.0f;
+        }
+    }
+
+    /* Map heat to keys */
     for (int i = 0; i < KEY_COUNT; i++) {
-        float row = (float)f87_key_layout[i].row;
-        float col = (float)f87_key_layout[i].col;
-        float t = (float)p->frame * speed_factor(p->speed) * 0.15f;
-        float noise = sinf(col * 1.3f + t) * cosf(row * 2.1f - t * 0.7f);
-        float heat = (1.0f - row / 6.0f) * 0.7f + noise * 0.3f;
-        if (heat < 0) heat = 0;
-        if (heat > 1) heat = 1;
-        /* Fire gradient: black -> red -> orange -> yellow */
-        if (heat < 0.33f) {
-            float v = heat / 0.33f;
-            p->buf[i][0] = (uint8_t)(255 * v);
+        int row = f87_key_layout[i].row;
+        int col = f87_key_layout[i].col;
+        if (row >= FIRE_ROWS || col >= FIRE_COLS) {
+            p->buf[i][0] = p->buf[i][1] = p->buf[i][2] = 0;
+            continue;
+        }
+
+        float h = heat[row][col];
+        /* Fire gradient: black -> color -> orange -> yellow */
+        if (h < 0.33f) {
+            float t = h / 0.33f;
+            p->buf[i][0] = (uint8_t)(p->color[0] * t);
             p->buf[i][1] = 0;
             p->buf[i][2] = 0;
-        } else if (heat < 0.66f) {
-            float v = (heat - 0.33f) / 0.33f;
-            p->buf[i][0] = 255;
-            p->buf[i][1] = (uint8_t)(165 * v);
+        } else if (h < 0.66f) {
+            float t = (h - 0.33f) / 0.33f;
+            p->buf[i][0] = p->color[0];
+            p->buf[i][1] = (uint8_t)(p->color[1] * t);
             p->buf[i][2] = 0;
         } else {
-            float v = (heat - 0.66f) / 0.34f;
-            p->buf[i][0] = 255;
-            p->buf[i][1] = 165 + (uint8_t)(90 * v);
-            p->buf[i][2] = (uint8_t)(100 * v);
+            float t = (h - 0.66f) / 0.34f;
+            p->buf[i][0] = p->color[0];
+            p->buf[i][1] = p->color[1];
+            p->buf[i][2] = (uint8_t)(255 * t);
         }
     }
 }
