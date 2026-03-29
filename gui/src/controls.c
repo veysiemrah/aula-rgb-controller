@@ -96,20 +96,14 @@ static GtkWidget *create_color_palette(F87Controls *ctrl)
     gtk_flow_box_set_selection_mode(flow, GTK_SELECTION_NONE);
 
     for (int i = 0; i < NUM_PRESETS; i++) {
-        GtkButton *btn = GTK_BUTTON(gtk_button_new());
-        gtk_widget_add_css_class(GTK_WIDGET(btn), "color-swatch");
-
-        char css_str[128];
-        snprintf(css_str, sizeof(css_str),
-                 "button { background: rgb(%d,%d,%d); min-width:28px; min-height:28px; }",
+        GtkButton *btn = GTK_BUTTON(gtk_button_new_with_label("\xe2\x96\x88")); /* Unicode full block */
+        char markup[128];
+        snprintf(markup, sizeof(markup),
+                 "<span foreground=\"#%02x%02x%02x\" font=\"16\">\xe2\x96\x88</span>",
                  preset_colors[i][0], preset_colors[i][1], preset_colors[i][2]);
-
-        GtkCssProvider *prov = gtk_css_provider_new();
-        gtk_css_provider_load_from_string(prov, css_str);
-        gtk_style_context_add_provider(
-            gtk_widget_get_style_context(GTK_WIDGET(btn)),
-            GTK_STYLE_PROVIDER(prov),
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        GtkWidget *child = gtk_button_get_child(btn);
+        if (GTK_IS_LABEL(child))
+            gtk_label_set_markup(GTK_LABEL(child), markup);
 
         g_object_set_data(G_OBJECT(btn), "color-idx", GINT_TO_POINTER(i));
         g_signal_connect(btn, "clicked", G_CALLBACK(on_color_swatch_clicked), ctrl);
@@ -365,6 +359,8 @@ F87Controls *f87_controls_new(f87_app_state_t *state,
 
     ctrl->container = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
     gtk_widget_add_css_class(GTK_WIDGET(ctrl->container), "controls-panel");
+    gtk_widget_set_size_request(GTK_WIDGET(ctrl->container), -1, 250);
+    gtk_widget_set_vexpand(GTK_WIDGET(ctrl->container), FALSE);
 
     ctrl->params_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
     GtkLabel *placeholder = GTK_LABEL(gtk_label_new("Efekt seciniz"));

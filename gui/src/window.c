@@ -53,6 +53,12 @@ static void on_effect_selected(const char *category, const char *effect_name,
 
 static void f87_window_init(F87Window *self)
 {
+    /* Use AdwToolbarView for proper header + content layout */
+    AdwHeaderBar *header = ADW_HEADER_BAR(adw_header_bar_new());
+
+    AdwToolbarView *toolbar_view = ADW_TOOLBAR_VIEW(adw_toolbar_view_new());
+    adw_toolbar_view_add_top_bar(toolbar_view, GTK_WIDGET(header));
+
     /* Main layout: horizontal paned (sidebar | main) */
     self->paned = GTK_PANED(gtk_paned_new(GTK_ORIENTATION_HORIZONTAL));
     gtk_paned_set_position(self->paned, 220);
@@ -83,9 +89,14 @@ static void f87_window_init(F87Window *self)
     gtk_widget_set_vexpand(GTK_WIDGET(self->keyboard), TRUE);
     gtk_box_append(right_box, GTK_WIDGET(self->keyboard));
 
-    /* Control panel (populated on effect selection) */
+    /* Control panel in scrolled window — prevents resizing */
     self->controls = f87_controls_new(&self->app_state, on_status_update, self);
-    gtk_box_append(right_box, f87_controls_get_widget(self->controls));
+    GtkScrolledWindow *ctrl_scroll = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new());
+    gtk_scrolled_window_set_policy(ctrl_scroll, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(ctrl_scroll, f87_controls_get_widget(self->controls));
+    gtk_widget_set_vexpand(GTK_WIDGET(ctrl_scroll), FALSE);
+    gtk_widget_set_size_request(GTK_WIDGET(ctrl_scroll), -1, 260);
+    gtk_box_append(right_box, GTK_WIDGET(ctrl_scroll));
 
     /* Status bar */
     self->status_label = GTK_LABEL(gtk_label_new("Bekleniyor"));
@@ -96,8 +107,9 @@ static void f87_window_init(F87Window *self)
     self->main_box = right_box;
     gtk_paned_set_end_child(self->paned, GTK_WIDGET(right_box));
 
+    adw_toolbar_view_set_content(toolbar_view, GTK_WIDGET(self->paned));
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(self),
-                                       GTK_WIDGET(self->paned));
+                                       GTK_WIDGET(toolbar_view));
 
     /* Initialize device connection */
     f87_app_state_init(&self->app_state);
