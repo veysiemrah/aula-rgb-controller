@@ -276,6 +276,18 @@ static int method_get_status(sd_bus_message *msg, void *userdata,
                                f87d_effmgr_category_str(ctx->effmgr->category));
     if (r < 0) goto fail;
 
+    r = sd_bus_message_append(reply, "{sv}", "IsWireless", "b",
+                               (int)(ctx->devmgr->connected ?
+                                     ctx->devmgr->connected_info.is_wireless : 0));
+    if (r < 0) goto fail;
+
+    int32_t battery = -1;
+    f87_device *status_dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (status_dev)
+        battery = f87_get_battery_level(status_dev);
+    r = sd_bus_message_append(reply, "{sv}", "BatteryLevel", "i", battery);
+    if (r < 0) goto fail;
+
     r = sd_bus_message_close_container(reply);
     if (r < 0) goto fail;
 
@@ -327,6 +339,19 @@ static int prop_get_brightness(sd_bus *bus, const char *path,
     (void)bus; (void)path; (void)iface; (void)property; (void)error;
     f87d_dbus_ctx_t *ctx = userdata;
     return sd_bus_message_append(reply, "y", ctx->effmgr->brightness);
+}
+
+static int method_get_battery_level(sd_bus_message *msg, void *userdata,
+                                     sd_bus_error *error)
+{
+    (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    int32_t level = dev ? f87_get_battery_level(dev) : -1;
+
+    return sd_bus_reply_method_return(msg, "i", level);
 }
 
 /* ---- Side/battery light methods ---- */
@@ -524,6 +549,29 @@ static int prop_get_battery_light(sd_bus *bus, const char *path,
     return sd_bus_message_append(reply, "y", ctx->effmgr->battery_light);
 }
 
+static int prop_get_is_wireless(sd_bus *bus, const char *path,
+                                const char *iface, const char *property,
+                                sd_bus_message *reply, void *userdata,
+                                sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    int val = ctx->devmgr->connected ? ctx->devmgr->connected_info.is_wireless : 0;
+    return sd_bus_message_append(reply, "b", val);
+}
+
+static int prop_get_battery_level(sd_bus *bus, const char *path,
+                                   const char *iface, const char *property,
+                                   sd_bus_message *reply, void *userdata,
+                                   sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    int32_t level = dev ? f87_get_battery_level(dev) : -1;
+    return sd_bus_message_append(reply, "i", level);
+}
+
 /* ---- vtable ---- */
 
 static const sd_bus_vtable f87_vtable[] = {
@@ -561,6 +609,8 @@ static const sd_bus_vtable f87_vtable[] = {
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ListProfiles", "", "as", method_list_profiles,
                   SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetBatteryLevel", "", "i", method_get_battery_level,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
 
     SD_BUS_SIGNAL("DeviceConnected", "sqq", 0),
     SD_BUS_SIGNAL("DeviceDisconnected", "", 0),
@@ -577,6 +627,10 @@ static const sd_bus_vtable f87_vtable[] = {
     SD_BUS_PROPERTY("SideLight", "y", prop_get_side_light, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
     SD_BUS_PROPERTY("BatteryLight", "y", prop_get_battery_light, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("IsWireless", "b", prop_get_is_wireless, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("BatteryLevel", "i", prop_get_battery_level, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
 
     SD_BUS_VTABLE_END,

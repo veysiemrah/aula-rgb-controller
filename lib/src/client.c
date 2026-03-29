@@ -206,6 +206,37 @@ int f87_client_is_connected(f87_client *client)
     return r < 0 ? -1 : val;
 }
 
+int f87_client_get_battery(f87_client *client)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_call_method(client->bus, DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                               "GetBatteryLevel", &error, &reply, "");
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    int32_t level = -1;
+    sd_bus_message_read(reply, "i", &level);
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return level;
+}
+
+int f87_client_is_wireless(f87_client *client)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    int val = 0;
+
+    int r = sd_bus_get_property_trivial(client->bus, DBUS_DEST, DBUS_PATH,
+                                         DBUS_IFACE, "IsWireless", &error,
+                                         'b', &val);
+    sd_bus_error_free(&error);
+    return r < 0 ? -1 : val;
+}
+
 int f87_client_set_side_light(f87_client *client, uint8_t mode)
 {
     return call_bool(client, "SetSideLight", "y", mode);

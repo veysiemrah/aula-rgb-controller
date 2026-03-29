@@ -14,6 +14,7 @@ typedef struct {
     char product[128];
     uint8_t bus;
     uint8_t address;
+    uint8_t is_wireless;
 } f87_device_info;
 
 f87_ctx *f87_init(void);
