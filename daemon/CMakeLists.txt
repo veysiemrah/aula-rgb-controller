@@ -9,6 +9,7 @@ add_executable(f87d
     src/dbus_interface.c
     src/idle_monitor.c
     src/profile_manager.c
+    src/error_history.c
 )
 
 target_include_directories(f87d PRIVATE

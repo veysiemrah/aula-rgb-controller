@@ -58,6 +58,11 @@ if(SYSTEMD_FOUND)
 endif()
 add_test(NAME logger_tests COMMAND test_logger)
 
+add_executable(test_error_history tests/test_error_history.c daemon/src/error_history.c)
+target_include_directories(test_error_history PRIVATE daemon/src lib/include lib/src)
+target_link_libraries(test_error_history Threads::Threads)
+add_test(NAME error_history_tests COMMAND test_error_history)
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 option(BUILD_DAEMON "Build the f87d D-Bus daemon" ON)
