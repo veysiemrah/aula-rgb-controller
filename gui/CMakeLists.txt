@@ -17,6 +17,7 @@ add_custom_command(
 add_executable(f87control
     src/main.c
     src/window.c
+    src/sidebar.c
     ${GRESOURCE_C}
 )
 

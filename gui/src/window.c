@@ -1,4 +1,6 @@
 #include "window.h"
+#include "sidebar.h"
+#include <stdio.h>
 
 struct _F87Window {
     AdwApplicationWindow parent;
@@ -9,6 +11,15 @@ struct _F87Window {
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
+
+static void on_effect_selected(const char *category, const char *effect_name,
+                                int effect_id, gpointer user_data)
+{
+    F87Window *self = user_data;
+    char buf[256];
+    snprintf(buf, sizeof(buf), "Secilen: %s — %s (id=%d)", category, effect_name, effect_id);
+    gtk_label_set_text(self->status_label, buf);
+}
 
 static void f87_window_init(F87Window *self)
 {
@@ -23,9 +34,9 @@ static void f87_window_init(F87Window *self)
     self->sidebar_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
     gtk_widget_add_css_class(GTK_WIDGET(self->sidebar_box), "sidebar");
 
-    GtkLabel *sidebar_placeholder = GTK_LABEL(gtk_label_new("Efektler"));
-    gtk_widget_set_opacity(GTK_WIDGET(sidebar_placeholder), 0.5);
-    gtk_box_append(self->sidebar_box, GTK_WIDGET(sidebar_placeholder));
+    /* Populate sidebar with effect categories */
+    GtkWidget *sidebar_content = f87_sidebar_create(on_effect_selected, self);
+    gtk_box_append(self->sidebar_box, sidebar_content);
 
     gtk_scrolled_window_set_child(sidebar_scroll, GTK_WIDGET(self->sidebar_box));
     gtk_paned_set_start_child(self->paned, GTK_WIDGET(sidebar_scroll));
