@@ -119,16 +119,22 @@ struct _F87KeyboardView {
 
 G_DEFINE_TYPE(F87KeyboardView, f87_keyboard_view, GTK_TYPE_DRAWING_AREA)
 
-/* Map reference coordinates to widget coordinates */
+/*
+ * Map reference coordinates to widget coordinates.
+ * Keys are expanded from their center to reduce gaps and appear larger.
+ * The grow factor controls how many extra ref-pixels each edge gains.
+ */
+#define KEY_GROW  4.0   /* px in ref space — shrinks ~12px gap to ~4px */
+
 static void ref_to_widget(const key_rect_t *kr, int width, int height,
                            double *ox, double *oy, double *ow, double *oh)
 {
     double sx = (double)width  / REF_W;
     double sy = (double)height / REF_H;
-    *ox = kr->x1 * sx;
-    *oy = kr->y1 * sy;
-    *ow = (kr->x2 - kr->x1) * sx;
-    *oh = (kr->y2 - kr->y1) * sy;
+    *ox = (kr->x1 - KEY_GROW) * sx;
+    *oy = (kr->y1 - KEY_GROW) * sy;
+    *ow = (kr->x2 - kr->x1 + 2 * KEY_GROW) * sx;
+    *oh = (kr->y2 - kr->y1 + 2 * KEY_GROW) * sy;
 }
 
 static void draw_rounded_rect(cairo_t *cr, double x, double y,
