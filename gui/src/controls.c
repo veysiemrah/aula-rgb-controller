@@ -1,4 +1,5 @@
 #include "controls.h"
+#include "preview.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -48,6 +49,7 @@ struct _F87Controls {
     guint loading_timer;
 
     F87KeyboardView *keyboard;
+    f87_preview_t *preview;
 };
 
 static void update_status(F87Controls *ctrl, const char *text)
@@ -124,6 +126,13 @@ static void sync_color_from_hsv(F87Controls *ctrl)
     /* Redraw SV area */
     if (ctrl->sv_area)
         gtk_widget_queue_draw(GTK_WIDGET(ctrl->sv_area));
+
+    /* Update preview color */
+    if (ctrl->preview)
+        f87_preview_set_color(ctrl->preview,
+                               ctrl->selected_color[0],
+                               ctrl->selected_color[1],
+                               ctrl->selected_color[2]);
 }
 
 /* ===== SV GRADIENT AREA (Saturation-Value picker) ===== */
@@ -270,6 +279,15 @@ static GtkWidget *create_slider(const char *label_text, double min, double max,
     return GTK_WIDGET(box);
 }
 
+/* ===== SPEED CHANGE -> PREVIEW UPDATE ===== */
+
+static void on_speed_changed(GtkRange *range, gpointer data)
+{
+    F87Controls *ctrl = data;
+    if (ctrl->preview)
+        f87_preview_set_speed(ctrl->preview, (uint8_t)gtk_range_get_value(range));
+}
+
 /* ===== CUSTOM PAINT CALLBACK ===== */
 
 static void on_key_painted(int key_id, gpointer user_data)
@@ -404,6 +422,7 @@ static GtkWidget *build_split_layout(F87Controls *ctrl, gboolean show_colorful)
 
     gtk_box_append(left, create_slider("Prk", 1, 4, 3, 1, &ctrl->brightness_scale));
     gtk_box_append(left, create_slider("Hiz", 0, 4, 2, 1, &ctrl->speed_scale));
+    g_signal_connect(ctrl->speed_scale, "value-changed", G_CALLBACK(on_speed_changed), ctrl);
 
     if (show_colorful) {
         GtkBox *cf_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4));
@@ -722,11 +741,24 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
 
     gtk_button_set_label(ctrl->send_button, "Kaydet");
     gtk_widget_set_sensitive(GTK_WIDGET(ctrl->send_button), TRUE);
+
+    /* Start preview animation (not for Custom paint mode) */
+    if (ctrl->preview) {
+        uint8_t spd = ctrl->speed_scale ?
+                       (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->speed_scale)) : 2;
+        f87_preview_start(ctrl->preview, effect_id, category, spd,
+                           ctrl->selected_color[0],
+                           ctrl->selected_color[1],
+                           ctrl->selected_color[2]);
+    }
 }
 
 void f87_controls_set_keyboard(F87Controls *ctrl, F87KeyboardView *keyboard)
 {
     ctrl->keyboard = keyboard;
+    if (ctrl->preview)
+        f87_preview_destroy(ctrl->preview);
+    ctrl->preview = f87_preview_new(keyboard);
 }
 
 GtkWidget *f87_controls_get_widget(F87Controls *ctrl)
