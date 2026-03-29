@@ -60,14 +60,25 @@ static void on_color_swatch_clicked(GtkButton *btn, gpointer data)
     ctrl->selected_color[2] = preset_colors[idx][2];
 }
 
+static void on_color_dialog_finish(GObject *source, GAsyncResult *result, gpointer data)
+{
+    F87Controls *ctrl = data;
+    GtkColorDialog *dialog = GTK_COLOR_DIALOG(source);
+    GdkRGBA *color = gtk_color_dialog_choose_rgba_finish(dialog, result, NULL);
+    if (color) {
+        ctrl->selected_color[0] = (uint8_t)(color->red * 255);
+        ctrl->selected_color[1] = (uint8_t)(color->green * 255);
+        ctrl->selected_color[2] = (uint8_t)(color->blue * 255);
+        gdk_rgba_free(color);
+    }
+}
+
 static void on_custom_color(GtkButton *btn, gpointer data)
 {
-    (void)btn;
     F87Controls *ctrl = data;
 
-    GtkColorChooserDialog *dialog = GTK_COLOR_CHOOSER_DIALOG(
-        gtk_color_chooser_dialog_new("Renk Sec", NULL));
-    gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+    GtkColorDialog *dialog = gtk_color_dialog_new();
+    gtk_color_dialog_set_title(dialog, "Renk Sec");
 
     GdkRGBA current = {
         ctrl->selected_color[0] / 255.0,
@@ -75,13 +86,12 @@ static void on_custom_color(GtkButton *btn, gpointer data)
         ctrl->selected_color[2] / 255.0,
         1.0
     };
-    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog), &current);
 
-    g_signal_connect(dialog, "response", G_CALLBACK(gtk_window_destroy), NULL);
-    g_signal_connect(dialog, "color-activated",
-                     G_CALLBACK(gtk_window_destroy), NULL);
-
-    gtk_window_present(GTK_WINDOW(dialog));
+    GtkWidget *toplevel = gtk_widget_get_ancestor(GTK_WIDGET(btn), GTK_TYPE_WINDOW);
+    gtk_color_dialog_choose_rgba(dialog,
+                                  GTK_WINDOW(toplevel),
+                                  &current, NULL,
+                                  on_color_dialog_finish, ctrl);
 }
 
 static GtkWidget *create_color_palette(F87Controls *ctrl)
