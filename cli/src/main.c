@@ -6,6 +6,7 @@
  */
 
 #include <f87/f87.h>
+#include <f87/client.h>
 
 /* Internal header -- needed only for raw send/listen (f87_pkt_send/recv) */
 #include "protocol.h"
@@ -44,8 +45,12 @@ static void usage(const char *progname)
         "  raw send \"XX XX XX ...\"            Send raw HID feature report\n"
         "  raw listen                        Read HID feature report\n"
         "\n"
-        "  animate <effect> [RRGGBB] [opts]   Software animation (foreground)\n"
-        "  music <mode> [opts]               Music-reactive mode (foreground)\n"
+        "  animate <effect> [RRGGBB] [opts]   Software animation\n"
+        "  music <mode> [opts]               Music-reactive mode\n"
+        "  stop                              Stop active effect (daemon mode)\n"
+        "\n"
+        "Options:\n"
+        "  --direct                          Bypass daemon, use direct USB\n"
         "\n"
         "HW Effects: off, static, breathing, wave, spectrum, rain, ripple,\n"
         "            starlight, snake, aurora, reactive, marquee, circle,\n"
@@ -815,6 +820,157 @@ static int cmd_raw_listen(f87_ctx *ctx)
 }
 
 /* ---------------------------------------------------------------------------
+ * Daemon client dispatch
+ * ---------------------------------------------------------------------------*/
+
+static int dispatch_client(f87_client *client, const char *cmd,
+                            int argc, char **argv)
+{
+    if (strcmp(cmd, "list") == 0 || strcmp(cmd, "info") == 0) {
+        f87_client_status_t st;
+        if (f87_client_get_status(client, &st) < 0) {
+            fprintf(stderr, "Failed to get status from daemon.\n");
+            return 1;
+        }
+        printf("Connected: %s\n", st.connected ? "yes" : "no");
+        printf("Active effect: %d (%s)\n", st.active_effect, st.category);
+        return 0;
+
+    } else if (strcmp(cmd, "brightness") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl brightness <1-4>\n"); return 1; }
+        int level = atoi(argv[0]);
+        if (level < 1 || level > 4) { fprintf(stderr, "Brightness must be 1-4.\n"); return 1; }
+        if (f87_client_set_brightness(client, (uint8_t)level) < 0) {
+            fprintf(stderr, "Failed to set brightness.\n"); return 1;
+        }
+        printf("Brightness set to %d/4.\n", level);
+        return 0;
+
+    } else if (strcmp(cmd, "off") == 0) {
+        if (f87_client_off(client) < 0) {
+            fprintf(stderr, "Failed to turn off.\n"); return 1;
+        }
+        printf("Lights off.\n");
+        return 0;
+
+    } else if (strcmp(cmd, "color") == 0 || strcmp(cmd, "colour") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl color <RRGGBB>\n"); return 1; }
+        f87_color color;
+        if (parse_color(argv[0], &color) < 0) {
+            fprintf(stderr, "Invalid colour '%s'.\n", argv[0]); return 1;
+        }
+        if (f87_client_set_color(client, color.r, color.g, color.b) < 0) {
+            fprintf(stderr, "Failed to set color.\n"); return 1;
+        }
+        printf("Color set to #%02X%02X%02X.\n", color.r, color.g, color.b);
+        return 0;
+
+    } else if (strcmp(cmd, "effect") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl effect <name> [opts]\n"); return 1; }
+        const char *name = argv[0];
+        f87_mode mode = F87_MODE_OFF;
+
+        struct { const char *n; f87_mode m; } modes[] = {
+            {"off", F87_MODE_OFF}, {"static", F87_MODE_STATIC},
+            {"breathing", F87_MODE_BREATHING}, {"wave", F87_MODE_WAVE},
+            {"spectrum", F87_MODE_SPECTRUM}, {"rain", F87_MODE_RAIN},
+            {"ripple", F87_MODE_RIPPLE}, {"starlight", F87_MODE_STARLIGHT},
+            {"snake", F87_MODE_SNAKE}, {"aurora", F87_MODE_AURORA},
+            {"reactive", F87_MODE_REACTIVE}, {"marquee", F87_MODE_MARQUEE},
+            {"circle", F87_MODE_CIRCLE}, {"raindown", F87_MODE_RAINDOWN},
+            {"center", F87_MODE_RIPPLE_CENTER}, {"custom", F87_MODE_CUSTOM},
+            {NULL, 0}
+        };
+        int found = 0;
+        for (int i = 0; modes[i].n; i++) {
+            if (strcasecmp(name, modes[i].n) == 0) { mode = modes[i].m; found = 1; break; }
+        }
+        if (!found) { fprintf(stderr, "Unknown effect '%s'.\n", name); return 1; }
+
+        f87_color color = F87_COLOR_RED;
+        uint8_t bright = F87_BRIGHTNESS_MAX, spd = 2, colorful = 0;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--brightness") == 0 && i+1 < argc) bright = (uint8_t)atoi(argv[++i]);
+            else if (strcmp(argv[i], "--speed") == 0 && i+1 < argc) spd = (uint8_t)atoi(argv[++i]);
+            else if (strcmp(argv[i], "--colorful") == 0) colorful = 1;
+            else if (argv[i][0] != '-') parse_color(argv[i], &color);
+        }
+
+        if (f87_client_set_effect(client, (int)mode, bright, spd, colorful,
+                                   color.r, color.g, color.b) < 0) {
+            fprintf(stderr, "Failed to set effect.\n"); return 1;
+        }
+        printf("Effect set to %s.\n", f87_mode_name(mode));
+        return 0;
+
+    } else if (strcmp(cmd, "animate") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl animate <effect> [opts]\n"); return 1; }
+        int effect_id = parse_sw_effect(argv[0]);
+        if (effect_id < 0) { fprintf(stderr, "Unknown effect: %s\n", argv[0]); return 1; }
+
+        uint8_t r = 255, g = 80, b = 0, bright = 3, spd = 2;
+        int fps = 0;
+        const char *profile = NULL, *config_path = NULL;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--speed") == 0 && i+1 < argc) spd = (uint8_t)atoi(argv[++i]);
+            else if (strcmp(argv[i], "--brightness") == 0 && i+1 < argc) bright = (uint8_t)atoi(argv[++i]);
+            else if (strcmp(argv[i], "--fps") == 0 && i+1 < argc) fps = atoi(argv[++i]);
+            else if (strcmp(argv[i], "--profile") == 0 && i+1 < argc) profile = argv[++i];
+            else if (strcmp(argv[i], "--config") == 0 && i+1 < argc) config_path = argv[++i];
+            else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
+                f87_color c; if (parse_color(argv[i], &c) == 0) { r = c.r; g = c.g; b = c.b; }
+            }
+        }
+
+        int rc;
+        if (effect_id == F87_SW_SENSOR)
+            rc = f87_client_set_sensor_effect(client, profile, config_path);
+        else
+            rc = f87_client_set_sw_effect(client, effect_id, bright, spd, r, g, b, fps);
+        if (rc < 0) { fprintf(stderr, "Failed to start animation.\n"); return 1; }
+        printf("Animation '%s' started on daemon.\n", argv[0]);
+        return 0;
+
+    } else if (strcmp(cmd, "music") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl music <mode> [opts]\n"); return 1; }
+        int effect_id = parse_music_mode(argv[0]);
+        if (effect_id < 0) { fprintf(stderr, "Unknown music mode: %s\n", argv[0]); return 1; }
+
+        uint8_t r = 0, g = 128, b = 255, bright = 4;
+        double gain = 0.0;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--gain") == 0 && i+1 < argc) gain = atof(argv[++i]);
+            else if (strlen(argv[i]) == 6 && argv[i][0] != '-') {
+                f87_color c; if (parse_color(argv[i], &c) == 0) { r = c.r; g = c.g; b = c.b; }
+            }
+        }
+
+        if (f87_client_set_music_effect(client, effect_id, bright, r, g, b, gain) < 0) {
+            fprintf(stderr, "Failed to start music mode.\n"); return 1;
+        }
+        printf("Music mode '%s' started on daemon.\n", argv[0]);
+        return 0;
+
+    } else if (strcmp(cmd, "stop") == 0) {
+        f87_client_stop(client);
+        printf("Effect stopped.\n");
+        return 0;
+
+    } else if (strcmp(cmd, "raw") == 0) {
+        fprintf(stderr, "Raw commands require --direct mode.\n");
+        return 1;
+
+    } else if (strcmp(cmd, "key") == 0) {
+        fprintf(stderr, "Per-key commands require --direct mode.\n");
+        return 1;
+
+    } else {
+        fprintf(stderr, "Unknown command '%s'.\n", cmd);
+        return 1;
+    }
+}
+
+/* ---------------------------------------------------------------------------
  * Main
  * ---------------------------------------------------------------------------*/
 
@@ -825,7 +981,20 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const char *cmd = argv[1];
+    /* Check for --direct flag */
+    int direct_mode = 0;
+    int arg_offset = 0;
+    if (argc >= 2 && strcmp(argv[1], "--direct") == 0) {
+        direct_mode = 1;
+        arg_offset = 1;
+    }
+
+    if (argc < 2 + arg_offset) {
+        usage(argv[0]);
+        return 1;
+    }
+
+    const char *cmd = argv[1 + arg_offset];
 
     if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage(argv[0]);
@@ -836,6 +1005,21 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* Daemon client mode (default) */
+    if (!direct_mode) {
+        f87_client *client = f87_client_connect();
+        if (!client) {
+            fprintf(stderr, "Cannot connect to f87d daemon. "
+                    "Use --direct for direct USB access.\n");
+            return 1;
+        }
+        int ret = dispatch_client(client, cmd, argc - 2 - arg_offset,
+                                   argv + 2 + arg_offset);
+        f87_client_disconnect(client);
+        return ret;
+    }
+
+    /* Direct USB mode (--direct) */
     f87_ctx *ctx = f87_init();
     if (!ctx) {
         fprintf(stderr, "Failed to initialise libf87.\n");
