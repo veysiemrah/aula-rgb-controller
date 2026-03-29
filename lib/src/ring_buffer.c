@@ -12,6 +12,7 @@ void f87_ring_write(f87_audio_ring_t *ring, const f87_audio_data_t *data)
 {
     uint32_t wi = atomic_load_explicit(&ring->write_idx, memory_order_relaxed);
     ring->slots[wi & F87_AUDIO_RING_MASK] = *data;
+    atomic_thread_fence(memory_order_release);
     atomic_store_explicit(&ring->write_idx, wi + 1, memory_order_release);
 }
 
