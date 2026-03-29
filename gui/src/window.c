@@ -121,7 +121,7 @@ F87Window *f87_window_new(AdwApplication *app)
     return g_object_new(F87_TYPE_WINDOW,
                         "application", app,
                         "title", "F87Control",
-                        "default-width", 900,
-                        "default-height", 600,
+                        "default-width", 1000,
+                        "default-height", 550,
                         NULL);
 }
