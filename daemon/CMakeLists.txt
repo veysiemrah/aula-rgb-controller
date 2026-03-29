@@ -3,6 +3,7 @@ pkg_check_modules(SYSTEMD REQUIRED libsystemd)
 
 add_executable(f87d
     src/main.c
+    src/device_manager.c
 )
 
 target_include_directories(f87d PRIVATE
