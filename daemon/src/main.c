@@ -17,12 +17,15 @@
 #include "dbus_interface.h"
 #include "idle_monitor.h"
 #include "profile_manager.h"
+#include "error_history.h"
+#include <f87/logger.h>
 
 static volatile sig_atomic_t g_quit = 0;
 static f87d_device_manager_t g_devmgr;
 static f87d_effect_manager_t g_effmgr;
 static f87d_idle_monitor_t g_idle;
 static f87d_dbus_ctx_t g_dbus_ctx;
+static f87d_error_ring_t g_error_ring;
 
 static void signal_handler(int sig)
 {
@@ -60,6 +63,10 @@ int main(int argc, char **argv)
 
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
+
+    f87_log_init(F87_LOG_JOURNAL);
+    f87d_error_ring_init(&g_error_ring);
+    f87_log_set_callback(f87d_error_ring_log_callback, &g_error_ring);
 
     if (f87d_devmgr_init(&g_devmgr) < 0) {
         fprintf(stderr, "f87d: failed to init device manager\n");
@@ -118,6 +125,7 @@ int main(int argc, char **argv)
         .devmgr = &g_devmgr,
         .effmgr = &g_effmgr,
         .idle = &g_idle,
+        .error_ring = &g_error_ring,
     };
 
     r = f87d_dbus_register(bus, &g_dbus_ctx);
@@ -176,5 +184,7 @@ int main(int argc, char **argv)
     sd_bus_release_name(bus, "org.f87.Control");
     sd_bus_unref(bus);
     f87d_devmgr_destroy(&g_devmgr);
+    f87_log_shutdown();
+    f87d_error_ring_destroy(&g_error_ring);
     return EXIT_SUCCESS;
 }

@@ -1,4 +1,5 @@
 #include "dbus_interface.h"
+#include <f87/logger.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -561,6 +562,86 @@ done:
     return r;
 }
 
+/* ---- Error history / log level methods ---- */
+
+static int method_get_error_history(sd_bus_message *msg, void *userdata,
+                                     sd_bus_error *error)
+{
+    (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+
+    f87_log_entry_t entries[F87D_ERROR_RING_SIZE];
+    int count = f87d_error_ring_get_all(ctx->error_ring, entries,
+                                         F87D_ERROR_RING_SIZE);
+
+    sd_bus_message *reply = NULL;
+    int r = sd_bus_message_new_method_return(msg, &reply);
+    if (r < 0) return r;
+
+    r = sd_bus_message_open_container(reply, 'a', "(tsssis)");
+    if (r < 0) goto fail;
+
+    for (int i = 0; i < count; i++) {
+        r = sd_bus_message_append(reply, "(tsssis)",
+            entries[i].timestamp_us,
+            f87_log_level_to_string(entries[i].level),
+            f87_log_source_to_string(entries[i].source),
+            entries[i].message,
+            (int32_t)entries[i].error_code,
+            entries[i].error_code != 0 ?
+                f87_strerror(entries[i].error_code) : "");
+        if (r < 0) goto fail;
+    }
+
+    r = sd_bus_message_close_container(reply);
+    if (r < 0) goto fail;
+
+    return sd_bus_send(NULL, reply, NULL);
+
+fail:
+    sd_bus_message_unref(reply);
+    return r;
+}
+
+static int method_clear_error_history(sd_bus_message *msg, void *userdata,
+                                       sd_bus_error *error)
+{
+    (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_error_ring_clear(ctx->error_ring);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_set_log_level(sd_bus_message *msg, void *userdata,
+                                 sd_bus_error *error)
+{
+    (void)userdata;
+    const char *level_str = NULL;
+
+    int rc = sd_bus_message_read(msg, "s", &level_str);
+    if (rc < 0)
+        return sd_bus_error_set_errno(error, -rc);
+
+    int level = f87_log_level_from_string(level_str);
+    if (level < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.InvalidParam",
+            "Invalid log level: %s", level_str);
+
+    f87_log_set_level(level);
+    F87_INFO(F87_SRC_DBUS, "Log level changed to %s", level_str);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_get_log_level(sd_bus_message *msg, void *userdata,
+                                 sd_bus_error *error)
+{
+    (void)userdata;
+    (void)error;
+    return sd_bus_reply_method_return(msg, "s",
+        f87_log_level_to_string(f87_log_get_level()));
+}
+
 /* ---- Side/battery light properties ---- */
 
 static int prop_get_side_light(sd_bus *bus, const char *path,
@@ -647,6 +728,14 @@ static const sd_bus_vtable f87_vtable[] = {
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("GetBatteryLevel", "", "i", method_get_battery_level,
                   SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetErrorHistory", "", "a(tsssis)",
+                  method_get_error_history, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("ClearErrorHistory", "", "b",
+                  method_clear_error_history, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetLogLevel", "s", "b",
+                  method_set_log_level, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetLogLevel", "", "s",
+                  method_get_log_level, SD_BUS_VTABLE_UNPRIVILEGED),
 
     SD_BUS_SIGNAL("DeviceConnected", "sqq", 0),
     SD_BUS_SIGNAL("DeviceDisconnected", "", 0),

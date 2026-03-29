@@ -6,12 +6,14 @@
 #include "effect_manager.h"
 #include "idle_monitor.h"
 #include "profile_manager.h"
+#include "error_history.h"
 
 typedef struct {
     sd_bus *bus;
     f87d_device_manager_t *devmgr;
     f87d_effect_manager_t *effmgr;
     f87d_idle_monitor_t *idle;
+    f87d_error_ring_t *error_ring;
 } f87d_dbus_ctx_t;
 
 int f87d_dbus_register(sd_bus *bus, f87d_dbus_ctx_t *ctx);
