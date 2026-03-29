@@ -16,6 +16,7 @@
 #include "effect_manager.h"
 #include "dbus_interface.h"
 #include "idle_monitor.h"
+#include "profile_manager.h"
 
 static volatile sig_atomic_t g_quit = 0;
 static f87d_device_manager_t g_devmgr;
@@ -68,6 +69,41 @@ int main(int argc, char **argv)
     f87d_idle_init(&g_idle);
 
     f87d_devmgr_scan(&g_devmgr, &g_dev_cbs);
+
+    /* Restore last state */
+    f87d_profile_t last_profile;
+    if (f87d_profile_load_last(&last_profile) == 0) {
+        f87_device *dev = f87d_devmgr_get_device(&g_devmgr);
+        if (dev) {
+            printf("f87d: restoring last state (%s, effect %d)\n",
+                   last_profile.category, last_profile.effect_id);
+            if (strcmp(last_profile.category, "hw") == 0 && last_profile.effect_id >= 0) {
+                f87d_effmgr_set_hw(&g_effmgr, dev, last_profile.effect_id,
+                                    last_profile.brightness, last_profile.speed,
+                                    last_profile.colorful,
+                                    last_profile.color[0], last_profile.color[1],
+                                    last_profile.color[2]);
+            } else if (strcmp(last_profile.category, "sw") == 0) {
+                f87d_effmgr_set_sw(&g_effmgr, dev, last_profile.effect_id,
+                                    last_profile.brightness, last_profile.speed,
+                                    last_profile.color[0], last_profile.color[1],
+                                    last_profile.color[2], 0);
+            } else if (strcmp(last_profile.category, "music") == 0) {
+                f87d_effmgr_set_music(&g_effmgr, dev, last_profile.effect_id,
+                                       last_profile.brightness,
+                                       last_profile.color[0], last_profile.color[1],
+                                       last_profile.color[2], last_profile.gain);
+            } else if (strcmp(last_profile.category, "sensor") == 0) {
+                f87d_effmgr_set_sensor(&g_effmgr, dev,
+                    last_profile.sensor_profile[0] ? last_profile.sensor_profile : NULL,
+                    last_profile.sensor_config_path[0] ? last_profile.sensor_config_path : NULL);
+            }
+            if (last_profile.side_light > 0)
+                f87d_effmgr_set_side_light(&g_effmgr, dev, last_profile.side_light);
+            if (last_profile.battery_light > 0)
+                f87d_effmgr_set_battery_light(&g_effmgr, dev, last_profile.battery_light);
+        }
+    }
 
     sd_bus *bus = NULL;
     int r = sd_bus_open_user(&bus);
