@@ -71,6 +71,17 @@ int f87_app_state_rescan(f87_app_state_t *state)
     return 0;
 }
 
+/* Try to reconnect after a failed command — keyboard may have reset */
+static int try_reconnect(f87_app_state_t *state)
+{
+    /* Ask daemon to rescan for the device */
+    int rc = f87_client_rescan(state->client);
+    if (rc < 0) return -1;
+
+    state->device_connected = f87_client_is_connected(state->client) > 0;
+    return state->device_connected ? 0 : -1;
+}
+
 int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
                             uint8_t brightness, uint8_t speed,
                             uint8_t colorful, uint8_t r, uint8_t g, uint8_t b)
@@ -80,10 +91,18 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
     int rc = f87_client_set_effect(state->client, mode_id, brightness, speed,
                                     colorful, r, g, b);
     if (rc < 0) {
-        snprintf(state->status_text, sizeof(state->status_text),
-                 "Efekt gonderilemedi");
-        state->status = F87_GUI_ERROR;
-        return rc;
+        /* Try reconnect and retry once */
+        if (try_reconnect(state) == 0) {
+            rc = f87_client_set_effect(state->client, mode_id, brightness, speed,
+                                        colorful, r, g, b);
+        }
+        if (rc < 0) {
+            snprintf(state->status_text, sizeof(state->status_text),
+                     "Klavye baglantisi koptu — yeniden baglanamadi");
+            state->status = F87_GUI_ERROR;
+            state->device_connected = false;
+            return rc;
+        }
     }
 
     snprintf(state->status_text, sizeof(state->status_text),
@@ -117,10 +136,31 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
     }
 
     if (rc < 0) {
-        snprintf(state->status_text, sizeof(state->status_text),
-                 "Animasyon baslatilamadi");
-        state->status = F87_GUI_ERROR;
-        return -1;
+        /* Try reconnect and retry once */
+        if (try_reconnect(state) == 0) {
+            if (effect_id == F87_SW_SENSOR) {
+                rc = f87_client_set_sensor_effect(state->client,
+                                                   config->sensor_profile,
+                                                   config->sensor_config_path);
+            } else if (effect_id >= 200) {
+                rc = f87_client_set_music_effect(state->client, effect_id,
+                                                  config->brightness,
+                                                  config->color[0], config->color[1],
+                                                  config->color[2], config->gain);
+            } else {
+                rc = f87_client_set_sw_effect(state->client, effect_id,
+                                               config->brightness, config->speed,
+                                               config->color[0], config->color[1],
+                                               config->color[2], config->fps);
+            }
+        }
+        if (rc < 0) {
+            snprintf(state->status_text, sizeof(state->status_text),
+                     "Klavye baglantisi koptu — yeniden baglanamadi");
+            state->status = F87_GUI_ERROR;
+            state->device_connected = false;
+            return -1;
+        }
     }
 
     snprintf(state->status_text, sizeof(state->status_text),

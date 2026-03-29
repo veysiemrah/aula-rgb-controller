@@ -17,10 +17,14 @@ window {
     background-color: #0f3460;
 }
 
-.category-header {
+.category-expander {
+    padding: 4px 8px;
     color: #4cc9f0;
     font-weight: bold;
-    padding: 8px 12px 4px;
+}
+
+.category-expander > title {
+    color: #4cc9f0;
 }
 
 .keyboard-preview {
@@ -32,7 +36,7 @@ window {
 .controls-panel {
     background-color: #16213e;
     border-radius: 8px;
-    padding: 12px;
+    padding: 8px;
 }
 
 .status-bar {
@@ -65,9 +69,36 @@ window {
     background: #e94560;
     color: white;
     font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background 200ms ease;
+}
+
+.action-button:hover {
+    background: #ff6b81;
+}
+
+.action-button:active {
+    background: #c0392b;
+}
+
+.action-button.loading {
+    background: #888;
+    color: #ccc;
 }
 
 .stop-button {
     background: #555;
     color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background 200ms ease;
+}
+
+.stop-button:hover {
+    background: #777;
+}
+
+.stop-button:active {
+    background: #444;
 }
