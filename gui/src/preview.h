@@ -20,4 +20,7 @@ void f87_preview_set_color(f87_preview_t *prev, uint8_t r, uint8_t g, uint8_t b)
 /* Stop preview */
 void f87_preview_stop(f87_preview_t *prev);
 
+/* Check if effect is reactive (needs keypress input) */
+int f87_preview_is_reactive(int effect_id);
+
 #endif

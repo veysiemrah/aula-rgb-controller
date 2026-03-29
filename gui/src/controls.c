@@ -720,10 +720,21 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
 
     clear_params(ctrl);
 
+    /* Title + reactive indicator */
+    GtkBox *title_row = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6));
     GtkLabel *title_label = GTK_LABEL(gtk_label_new(effect_name));
     gtk_label_set_xalign(title_label, 0);
     gtk_widget_add_css_class(GTK_WIDGET(title_label), "title-4");
-    gtk_box_append(ctrl->params_box, GTK_WIDGET(title_label));
+    gtk_box_append(title_row, GTK_WIDGET(title_label));
+
+    if (f87_preview_is_reactive(effect_id)) {
+        GtkLabel *reactive_label = GTK_LABEL(gtk_label_new("tus basmaya duyarli"));
+        gtk_widget_set_opacity(GTK_WIDGET(reactive_label), 0.5);
+        gtk_widget_add_css_class(GTK_WIDGET(reactive_label), "caption");
+        gtk_widget_set_valign(GTK_WIDGET(reactive_label), GTK_ALIGN_CENTER);
+        gtk_box_append(title_row, GTK_WIDGET(reactive_label));
+    }
+    gtk_box_append(ctrl->params_box, GTK_WIDGET(title_row));
 
     if (strcmp(category, "hw") == 0)
         build_hw_controls(ctrl);
