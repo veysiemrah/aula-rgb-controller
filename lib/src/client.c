@@ -237,6 +237,40 @@ int f87_client_is_wireless(f87_client *client)
     return r < 0 ? -1 : val;
 }
 
+int f87_client_set_per_key_colors(f87_client *client,
+                                   const uint8_t colors[][3], int count)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *msg = NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_message_new_method_call(client->bus, &msg,
+        DBUS_DEST, DBUS_PATH, DBUS_IFACE, "SetPerKeyColors");
+    if (r < 0) return -1;
+
+    r = sd_bus_message_open_container(msg, 'a', "(yyy)");
+    if (r < 0) { sd_bus_message_unref(msg); return -1; }
+
+    for (int i = 0; i < count; i++) {
+        r = sd_bus_message_append(msg, "(yyy)",
+                                   colors[i][0], colors[i][1], colors[i][2]);
+        if (r < 0) { sd_bus_message_unref(msg); return -1; }
+    }
+
+    r = sd_bus_message_close_container(msg);
+    if (r < 0) { sd_bus_message_unref(msg); return -1; }
+
+    r = sd_bus_call(client->bus, msg, 0, &error, &reply);
+    sd_bus_message_unref(msg);
+    if (r < 0) { sd_bus_error_free(&error); return -1; }
+
+    int result = 0;
+    sd_bus_message_read(reply, "b", &result);
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return result ? 0 : -1;
+}
+
 int f87_client_set_side_light(f87_client *client, uint8_t mode)
 {
     return call_bool(client, "SetSideLight", "y", mode);

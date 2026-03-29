@@ -186,3 +186,28 @@ int f87_app_state_stop(f87_app_state_t *state)
     state->status = F87_GUI_IDLE;
     return 0;
 }
+
+int f87_app_state_apply_custom(f87_app_state_t *state,
+                                const uint8_t colors[][3], int count)
+{
+    if (!state->client) return -1;
+
+    int rc = f87_client_set_per_key_colors(state->client, colors, count);
+    if (rc < 0) {
+        if (try_reconnect(state) == 0)
+            rc = f87_client_set_per_key_colors(state->client, colors, count);
+        if (rc < 0) {
+            snprintf(state->status_text, sizeof(state->status_text),
+                     "Per-key renkler gonderilemedi");
+            state->status = F87_GUI_ERROR;
+            return -1;
+        }
+    }
+
+    snprintf(state->status_text, sizeof(state->status_text),
+             "Custom calisiyor");
+    state->status = F87_GUI_RUNNING;
+    state->current_effect_id = 18;
+    strncpy(state->current_category, "hw", sizeof(state->current_category));
+    return 0;
+}

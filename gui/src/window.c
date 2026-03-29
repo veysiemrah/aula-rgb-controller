@@ -90,6 +90,7 @@ static void f87_window_init(F87Window *self)
 
     /* Control panel — scrollable parameters + fixed buttons at bottom */
     self->controls = f87_controls_new(&self->app_state, on_status_update, self);
+    f87_controls_set_keyboard(self->controls, self->keyboard);
     gtk_box_append(right_box, f87_controls_get_widget(self->controls));
 
     /* Status bar */

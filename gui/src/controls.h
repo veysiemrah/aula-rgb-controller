@@ -3,6 +3,7 @@
 
 #include <adwaita.h>
 #include "app_state.h"
+#include "keyboard_view.h"
 
 typedef struct _F87Controls F87Controls;
 
@@ -14,6 +15,8 @@ F87Controls *f87_controls_new(f87_app_state_t *state,
 
 void f87_controls_set_effect(F87Controls *ctrl, const char *category,
                               const char *effect_name, int effect_id);
+
+void f87_controls_set_keyboard(F87Controls *ctrl, F87KeyboardView *keyboard);
 
 GtkWidget *f87_controls_get_widget(F87Controls *ctrl);
 

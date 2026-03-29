@@ -34,4 +34,8 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
 
 int f87_app_state_stop(f87_app_state_t *state);
 
+/* Send per-key custom colors (88x3 RGB array) */
+int f87_app_state_apply_custom(f87_app_state_t *state,
+                                const uint8_t colors[][3], int count);
+
 #endif /* F87_APP_STATE_H */

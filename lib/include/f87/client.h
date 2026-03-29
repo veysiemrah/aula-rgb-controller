@@ -42,6 +42,10 @@ int f87_client_rescan(f87_client *client);
 int f87_client_get_battery(f87_client *client);
 int f87_client_is_wireless(f87_client *client);
 
+/* Per-key custom colors: colors is 88x3 array (RGB per key) */
+int f87_client_set_per_key_colors(f87_client *client,
+                                   const uint8_t colors[][3], int count);
+
 /* Side/battery light */
 int f87_client_set_side_light(f87_client *client, uint8_t mode);
 int f87_client_set_battery_light(f87_client *client, uint8_t mode);

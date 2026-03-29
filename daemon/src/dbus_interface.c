@@ -354,6 +354,40 @@ static int method_get_battery_level(sd_bus_message *msg, void *userdata,
     return sd_bus_reply_method_return(msg, "i", level);
 }
 
+static int method_set_per_key_colors(sd_bus_message *msg, void *userdata,
+                                      sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (!dev)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotConnected", "No keyboard connected");
+
+    int rc = sd_bus_message_enter_container(msg, 'a', "(yyy)");
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    int i = 0;
+    uint8_t r, g, b;
+    while (sd_bus_message_read(msg, "(yyy)", &r, &g, &b) > 0 && i < 88) {
+        f87_set_key_color(dev, (uint8_t)i, (f87_color){r, g, b});
+        i++;
+    }
+    sd_bus_message_exit_container(msg);
+
+    rc = f87_apply(dev);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.USBError", "Failed to apply per-key colors: %d", rc);
+
+    ctx->effmgr->category = F87D_CAT_HW;
+    ctx->effmgr->effect_id = 18; /* Custom */
+    autosave_last(ctx);
+    f87d_dbus_emit_effect_changed(ctx, 18, "hw");
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
 /* ---- Side/battery light methods ---- */
 
 static int method_set_side_light(sd_bus_message *msg, void *userdata,
@@ -608,6 +642,8 @@ static const sd_bus_vtable f87_vtable[] = {
     SD_BUS_METHOD("DeleteProfile", "s", "b", method_delete_profile,
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ListProfiles", "", "as", method_list_profiles,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetPerKeyColors", "a(yyy)", "b", method_set_per_key_colors,
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("GetBatteryLevel", "", "i", method_get_battery_level,
                   SD_BUS_VTABLE_UNPRIVILEGED),
