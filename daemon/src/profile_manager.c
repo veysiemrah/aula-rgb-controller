@@ -236,7 +236,8 @@ int f87d_profile_delete(const char *name)
     char path[768];
     snprintf(path, sizeof(path), "%s/%s.json", dir, name);
 
-    unlink(path);
+    if (unlink(path) < 0)
+        return -1;
     return 0;
 }
 
