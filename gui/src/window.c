@@ -1,0 +1,86 @@
+#include "window.h"
+
+struct _F87Window {
+    AdwApplicationWindow parent;
+    GtkPaned *paned;
+    GtkBox *sidebar_box;
+    GtkBox *main_box;
+    GtkLabel *status_label;
+};
+
+G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
+
+static void f87_window_init(F87Window *self)
+{
+    /* Main layout: horizontal paned (sidebar | main) */
+    self->paned = GTK_PANED(gtk_paned_new(GTK_ORIENTATION_HORIZONTAL));
+    gtk_paned_set_position(self->paned, 220);
+    gtk_paned_set_shrink_start_child(self->paned, FALSE);
+
+    /* Sidebar */
+    GtkScrolledWindow *sidebar_scroll = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new());
+    gtk_scrolled_window_set_policy(sidebar_scroll, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    self->sidebar_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    gtk_widget_add_css_class(GTK_WIDGET(self->sidebar_box), "sidebar");
+
+    GtkLabel *sidebar_placeholder = GTK_LABEL(gtk_label_new("Efektler"));
+    gtk_widget_set_opacity(GTK_WIDGET(sidebar_placeholder), 0.5);
+    gtk_box_append(self->sidebar_box, GTK_WIDGET(sidebar_placeholder));
+
+    gtk_scrolled_window_set_child(sidebar_scroll, GTK_WIDGET(self->sidebar_box));
+    gtk_paned_set_start_child(self->paned, GTK_WIDGET(sidebar_scroll));
+
+    /* Main area */
+    GtkBox *right_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 8));
+    gtk_widget_set_margin_start(GTK_WIDGET(right_box), 12);
+    gtk_widget_set_margin_end(GTK_WIDGET(right_box), 12);
+    gtk_widget_set_margin_top(GTK_WIDGET(right_box), 12);
+    gtk_widget_set_margin_bottom(GTK_WIDGET(right_box), 8);
+
+    /* Keyboard preview placeholder */
+    GtkBox *kb_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    gtk_widget_add_css_class(GTK_WIDGET(kb_box), "keyboard-preview");
+    gtk_widget_set_vexpand(GTK_WIDGET(kb_box), TRUE);
+    GtkLabel *kb_label = GTK_LABEL(gtk_label_new("Klavye Onizleme"));
+    gtk_widget_set_opacity(GTK_WIDGET(kb_label), 0.5);
+    gtk_widget_set_valign(GTK_WIDGET(kb_label), GTK_ALIGN_CENTER);
+    gtk_widget_set_halign(GTK_WIDGET(kb_label), GTK_ALIGN_CENTER);
+    gtk_widget_set_vexpand(GTK_WIDGET(kb_label), TRUE);
+    gtk_box_append(kb_box, GTK_WIDGET(kb_label));
+    gtk_box_append(right_box, GTK_WIDGET(kb_box));
+
+    /* Controls placeholder */
+    GtkBox *ctrl_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    gtk_widget_add_css_class(GTK_WIDGET(ctrl_box), "controls-panel");
+    GtkLabel *ctrl_label = GTK_LABEL(gtk_label_new("Efekt seciniz"));
+    gtk_widget_set_opacity(GTK_WIDGET(ctrl_label), 0.5);
+    gtk_box_append(ctrl_box, GTK_WIDGET(ctrl_label));
+    gtk_box_append(right_box, GTK_WIDGET(ctrl_box));
+
+    /* Status bar */
+    self->status_label = GTK_LABEL(gtk_label_new("Bekleniyor"));
+    gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-bar");
+    gtk_label_set_xalign(self->status_label, 0);
+    gtk_box_append(right_box, GTK_WIDGET(self->status_label));
+
+    self->main_box = right_box;
+    gtk_paned_set_end_child(self->paned, GTK_WIDGET(right_box));
+
+    adw_application_window_set_content(ADW_APPLICATION_WINDOW(self),
+                                       GTK_WIDGET(self->paned));
+}
+
+static void f87_window_class_init(F87WindowClass *klass)
+{
+    (void)klass;
+}
+
+F87Window *f87_window_new(AdwApplication *app)
+{
+    return g_object_new(F87_TYPE_WINDOW,
+                        "application", app,
+                        "title", "F87Control",
+                        "default-width", 900,
+                        "default-height", 600,
+                        NULL);
+}

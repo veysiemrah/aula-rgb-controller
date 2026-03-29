@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/f87control">
+    <file>style.css</file>
+  </gresource>
+</gresources>
