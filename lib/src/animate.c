@@ -9,8 +9,8 @@
 #include <linux/input.h>
 #include <sys/ioctl.h>
 
-#define F87_ANIM_FRAME_US_30  33333  /* ~30fps = 33.3ms */
-#define F87_ANIM_FRAME_US_60  16666  /* ~60fps = 16.6ms */
+#define F87_ANIM_MAX_FPS      25
+#define F87_ANIM_FRAME_US_25  40000  /* ~25fps = 40ms — safe USB limit */
 
 uint64_t f87_time_us(void)
 {
@@ -277,10 +277,12 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
     }
 
     /* Set frame rate: override from config, or auto (30fps SW, 60fps music) */
-    if (ctx->config.fps > 0)
-        ctx->frame_time_us = 1000000ULL / (uint64_t)ctx->config.fps;
-    else
-        ctx->frame_time_us = effect->needs_audio ? F87_ANIM_FRAME_US_60 : F87_ANIM_FRAME_US_30;
+    if (ctx->config.fps > 0) {
+        int fps = ctx->config.fps > F87_ANIM_MAX_FPS ? F87_ANIM_MAX_FPS : ctx->config.fps;
+        ctx->frame_time_us = 1000000ULL / (uint64_t)fps;
+    } else {
+        ctx->frame_time_us = F87_ANIM_FRAME_US_25;
+    }
 
     atomic_store(&ctx->running, true);
 
