@@ -66,13 +66,20 @@ int f87_find_devices(f87_ctx *ctx, f87_device_info **list, int *count)
     if (num < 0)
         return F87_ERR_IO;
 
+    /* Helper: check if VID/PID matches wired or wireless */
+    #define IS_F87_WIRED(v, p) \
+        ((v) == F87_VENDOR_ID && (p) == F87_PRODUCT_ID)
+    #define IS_F87_WIRELESS(v, p) \
+        ((v) == F87_VENDOR_ID_WIRELESS && (p) == F87_PRODUCT_ID_WIRELESS)
+    #define IS_F87(v, p) (IS_F87_WIRED(v, p) || IS_F87_WIRELESS(v, p))
+
     /* First pass: count matching devices */
     int matched = 0;
     for (ssize_t i = 0; i < num; i++) {
         struct libusb_device_descriptor desc;
         if (libusb_get_device_descriptor(devs[i], &desc) != 0)
             continue;
-        if (desc.idVendor == F87_VENDOR_ID && desc.idProduct == F87_PRODUCT_ID)
+        if (IS_F87(desc.idVendor, desc.idProduct))
             matched++;
     }
 
@@ -93,12 +100,13 @@ int f87_find_devices(f87_ctx *ctx, f87_device_info **list, int *count)
         struct libusb_device_descriptor desc;
         if (libusb_get_device_descriptor(devs[i], &desc) != 0)
             continue;
-        if (desc.idVendor != F87_VENDOR_ID || desc.idProduct != F87_PRODUCT_ID)
+        if (!IS_F87(desc.idVendor, desc.idProduct))
             continue;
 
         f87_device_info *info = &infos[idx];
         info->vendor_id = desc.idVendor;
         info->product_id = desc.idProduct;
+        info->is_wireless = IS_F87_WIRELESS(desc.idVendor, desc.idProduct) ? 1 : 0;
         info->bus = libusb_get_bus_number(devs[i]);
         info->address = libusb_get_device_address(devs[i]);
 
@@ -263,8 +271,18 @@ const char *f87_get_firmware_version(f87_device *dev)
 
 int f87_get_battery_level(f87_device *dev)
 {
-    (void)dev;
-    /* TODO: query battery level from device */
+    if (!dev)
+        return -1;
+
+    /* Wired devices have no battery */
+    if (!dev->info.is_wireless)
+        return -1;
+
+    /*
+     * Wireless battery query protocol is not yet reverse-engineered.
+     * Return -1 (unknown) until we capture the Windows software's
+     * battery query sequence.
+     */
     return -1;
 }
 
