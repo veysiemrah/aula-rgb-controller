@@ -6,6 +6,35 @@
 #define DBUS_PATH "/org/f87/Control"
 #define DBUS_IFACE "org.f87.Control"
 
+/* ---- Helpers ---- */
+
+static void snapshot_to_profile(f87d_dbus_ctx_t *ctx, f87d_profile_t *p)
+{
+    memset(p, 0, sizeof(*p));
+    strncpy(p->category,
+            f87d_effmgr_category_str(ctx->effmgr->category),
+            sizeof(p->category) - 1);
+    p->effect_id = ctx->effmgr->effect_id;
+    p->brightness = ctx->effmgr->brightness;
+    p->speed = ctx->effmgr->speed;
+    p->colorful = ctx->effmgr->colorful;
+    memcpy(p->color, ctx->effmgr->color, 3);
+    p->side_light = ctx->effmgr->side_light;
+    p->battery_light = ctx->effmgr->battery_light;
+    p->gain = ctx->effmgr->gain;
+    strncpy(p->sensor_profile, ctx->effmgr->sensor_profile,
+            sizeof(p->sensor_profile) - 1);
+    strncpy(p->sensor_config_path, ctx->effmgr->sensor_config_path,
+            sizeof(p->sensor_config_path) - 1);
+}
+
+static void autosave_last(f87d_dbus_ctx_t *ctx)
+{
+    f87d_profile_t p;
+    snapshot_to_profile(ctx, &p);
+    f87d_profile_save_last(&p);
+}
+
 /* ---- Method handlers ---- */
 
 static int method_set_effect(sd_bus_message *msg, void *userdata,
@@ -33,6 +62,7 @@ static int method_set_effect(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.USBError", "Failed to set effect: %d", rc);
 
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, effect_id, "hw");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -61,6 +91,7 @@ static int method_set_sw_effect(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.USBError", "Failed to start sw effect: %d", rc);
 
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, effect_id, "sw");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -90,6 +121,7 @@ static int method_set_music_effect(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.USBError", "Failed to start music effect: %d", rc);
 
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, effect_id, "music");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -117,6 +149,7 @@ static int method_set_sensor_effect(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.USBError", "Failed to start sensor effect: %d", rc);
 
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, F87_SW_SENSOR, "sensor");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -178,6 +211,7 @@ static int method_stop(sd_bus_message *msg, void *userdata,
     f87d_idle_touch(ctx->idle);
 
     f87d_effmgr_stop(ctx->effmgr);
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, -1, "");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -200,6 +234,7 @@ static int method_off(sd_bus_message *msg, void *userdata,
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.USBError", "Failed to turn off: %d", rc);
 
+    autosave_last(ctx);
     f87d_dbus_emit_effect_changed(ctx, 0, "hw");
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -294,6 +329,201 @@ static int prop_get_brightness(sd_bus *bus, const char *path,
     return sd_bus_message_append(reply, "y", ctx->effmgr->brightness);
 }
 
+/* ---- Side/battery light methods ---- */
+
+static int method_set_side_light(sd_bus_message *msg, void *userdata,
+                                  sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+    uint8_t mode;
+
+    int rc = sd_bus_message_read(msg, "y", &mode);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (!dev)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotConnected", "No keyboard connected");
+
+    rc = f87d_effmgr_set_side_light(ctx->effmgr, dev, mode);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.USBError", "Failed: %d", rc);
+
+    autosave_last(ctx);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_set_battery_light(sd_bus_message *msg, void *userdata,
+                                     sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+    uint8_t mode;
+
+    int rc = sd_bus_message_read(msg, "y", &mode);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (!dev)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotConnected", "No keyboard connected");
+
+    rc = f87d_effmgr_set_battery_light(ctx->effmgr, dev, mode);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.USBError", "Failed: %d", rc);
+
+    autosave_last(ctx);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+/* ---- Profile methods ---- */
+
+static int method_save_profile(sd_bus_message *msg, void *userdata,
+                                sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+    const char *name = NULL;
+
+    int rc = sd_bus_message_read(msg, "s", &name);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    if (f87d_profile_validate_name(name) < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.InvalidName", "Invalid profile name: %s", name);
+
+    f87d_profile_t p;
+    snapshot_to_profile(ctx, &p);
+    strncpy(p.name, name, sizeof(p.name) - 1);
+
+    rc = f87d_profile_save(&p, name);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.IOError", "Failed to save profile");
+
+    printf("f87d: profile saved: %s\n", name);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_load_profile(sd_bus_message *msg, void *userdata,
+                                sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+    const char *name = NULL;
+
+    int rc = sd_bus_message_read(msg, "s", &name);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    f87d_profile_t p;
+    rc = f87d_profile_load(name, &p);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotFound", "Profile not found: %s", name);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (!dev)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotConnected", "No keyboard connected");
+
+    if (strcmp(p.category, "hw") == 0) {
+        f87d_effmgr_set_hw(ctx->effmgr, dev, p.effect_id, p.brightness,
+                            p.speed, p.colorful, p.color[0], p.color[1], p.color[2]);
+    } else if (strcmp(p.category, "sw") == 0) {
+        f87d_effmgr_set_sw(ctx->effmgr, dev, p.effect_id, p.brightness,
+                            p.speed, p.color[0], p.color[1], p.color[2], 0);
+    } else if (strcmp(p.category, "music") == 0) {
+        f87d_effmgr_set_music(ctx->effmgr, dev, p.effect_id, p.brightness,
+                               p.color[0], p.color[1], p.color[2], p.gain);
+    } else if (strcmp(p.category, "sensor") == 0) {
+        f87d_effmgr_set_sensor(ctx->effmgr, dev,
+                                p.sensor_profile[0] ? p.sensor_profile : NULL,
+                                p.sensor_config_path[0] ? p.sensor_config_path : NULL);
+    }
+
+    if (p.side_light <= 4)
+        f87d_effmgr_set_side_light(ctx->effmgr, dev, p.side_light);
+    if (p.battery_light <= 4)
+        f87d_effmgr_set_battery_light(ctx->effmgr, dev, p.battery_light);
+
+    autosave_last(ctx);
+    f87d_dbus_emit_effect_changed(ctx, p.effect_id, p.category);
+    printf("f87d: profile loaded: %s\n", name);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_delete_profile(sd_bus_message *msg, void *userdata,
+                                  sd_bus_error *error)
+{
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+    const char *name = NULL;
+
+    int rc = sd_bus_message_read(msg, "s", &name);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+
+    f87d_profile_delete(name);
+    printf("f87d: profile deleted: %s\n", name);
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_list_profiles(sd_bus_message *msg, void *userdata,
+                                 sd_bus_error *error)
+{
+    (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    f87d_idle_touch(ctx->idle);
+
+    char **names = NULL;
+    int count = f87d_profile_list(&names);
+
+    sd_bus_message *reply = NULL;
+    int r = sd_bus_message_new_method_return(msg, &reply);
+    if (r < 0) goto done;
+
+    r = sd_bus_message_open_container(reply, 'a', "s");
+    if (r < 0) goto done;
+
+    for (int i = 0; i < count; i++) {
+        r = sd_bus_message_append(reply, "s", names[i]);
+        if (r < 0) goto done;
+    }
+
+    r = sd_bus_message_close_container(reply);
+    if (r < 0) goto done;
+
+    r = sd_bus_send(NULL, reply, NULL);
+
+done:
+    f87d_profile_free_list(names, count);
+    return r;
+}
+
+/* ---- Side/battery light properties ---- */
+
+static int prop_get_side_light(sd_bus *bus, const char *path,
+                                const char *iface, const char *property,
+                                sd_bus_message *reply, void *userdata,
+                                sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    return sd_bus_message_append(reply, "y", ctx->effmgr->side_light);
+}
+
+static int prop_get_battery_light(sd_bus *bus, const char *path,
+                                   const char *iface, const char *property,
+                                   sd_bus_message *reply, void *userdata,
+                                   sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    return sd_bus_message_append(reply, "y", ctx->effmgr->battery_light);
+}
+
 /* ---- vtable ---- */
 
 static const sd_bus_vtable f87_vtable[] = {
@@ -319,6 +549,18 @@ static const sd_bus_vtable f87_vtable[] = {
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("GetStatus", "", "a{sv}", method_get_status,
                   SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetSideLight", "y", "b", method_set_side_light,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetBatteryLight", "y", "b", method_set_battery_light,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SaveProfile", "s", "b", method_save_profile,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("LoadProfile", "s", "b", method_load_profile,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("DeleteProfile", "s", "b", method_delete_profile,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("ListProfiles", "", "as", method_list_profiles,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
 
     SD_BUS_SIGNAL("DeviceConnected", "sqq", 0),
     SD_BUS_SIGNAL("DeviceDisconnected", "", 0),
@@ -331,6 +573,10 @@ static const sd_bus_vtable f87_vtable[] = {
     SD_BUS_PROPERTY("ActiveCategory", "s", prop_get_category, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
     SD_BUS_PROPERTY("Brightness", "y", prop_get_brightness, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("SideLight", "y", prop_get_side_light, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("BatteryLight", "y", prop_get_battery_light, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
 
     SD_BUS_VTABLE_END,

@@ -5,6 +5,7 @@
 #include "device_manager.h"
 #include "effect_manager.h"
 #include "idle_monitor.h"
+#include "profile_manager.h"
 
 typedef struct {
     sd_bus *bus;
