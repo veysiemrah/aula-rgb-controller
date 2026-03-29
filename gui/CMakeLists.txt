@@ -35,6 +35,7 @@ target_link_libraries(f87control PRIVATE
     f87
     ${GTK4_LIBRARIES}
     ${ADW_LIBRARIES}
+    m
 )
 
 target_compile_options(f87control PRIVATE
