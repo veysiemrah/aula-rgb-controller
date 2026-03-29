@@ -24,14 +24,6 @@ static void on_row_activated(GtkListBox *box, GtkListBoxRow *row, gpointer data)
         sd->callback(category, name, id, sd->user_data);
 }
 
-static GtkWidget *make_category_label(const char *text)
-{
-    GtkLabel *label = GTK_LABEL(gtk_label_new(text));
-    gtk_widget_add_css_class(GTK_WIDGET(label), "category-header");
-    gtk_label_set_xalign(label, 0);
-    return GTK_WIDGET(label);
-}
-
 static GtkListBoxRow *make_effect_row(const char *category, const char *name, int id)
 {
     GtkListBoxRow *row = GTK_LIST_BOX_ROW(gtk_list_box_row_new());
@@ -46,8 +38,8 @@ static GtkListBoxRow *make_effect_row(const char *category, const char *name, in
     return row;
 }
 
-static void add_effect_list(GtkBox *box, const char *category,
-                             const EffectEntry *entries, SidebarData *sd)
+static GtkWidget *make_expander_category(const char *title, const char *category,
+                                          const EffectEntry *entries, SidebarData *sd)
 {
     GtkListBox *list = GTK_LIST_BOX(gtk_list_box_new());
     gtk_widget_add_css_class(GTK_WIDGET(list), "sidebar");
@@ -57,7 +49,12 @@ static void add_effect_list(GtkBox *box, const char *category,
         gtk_list_box_append(list, GTK_WIDGET(
             make_effect_row(category, entries[i].name, entries[i].id)));
 
-    gtk_box_append(box, GTK_WIDGET(list));
+    GtkExpander *expander = GTK_EXPANDER(gtk_expander_new(title));
+    gtk_expander_set_expanded(expander, FALSE);
+    gtk_expander_set_child(expander, GTK_WIDGET(list));
+    gtk_widget_add_css_class(GTK_WIDGET(expander), "category-expander");
+
+    return GTK_WIDGET(expander);
 }
 
 GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
@@ -76,8 +73,7 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
         {"Circle", 15}, {"Rain Down", 16}, {"Center Ripple", 17}, {"Custom", 18},
         {NULL, 0}
     };
-    gtk_box_append(box, make_category_label("Donanim Efektleri"));
-    add_effect_list(box, "hw", hw, sd);
+    gtk_box_append(box, make_expander_category("Donanim Efektleri", "hw", hw, sd));
 
     /* SW Effects */
     static const EffectEntry sw[] = {
@@ -86,8 +82,7 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
         {"Typewriter", 112}, {"Life", 113}, {"KeyHeat", 114},
         {NULL, 0}
     };
-    gtk_box_append(box, make_category_label("Yazilimsal Efektler"));
-    add_effect_list(box, "sw", sw, sd);
+    gtk_box_append(box, make_expander_category("Yazilimsal Efektler", "sw", sw, sd));
 
     /* Music */
     static const EffectEntry mu[] = {
@@ -95,15 +90,13 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
         {"VU Meter", 203}, {"FreqMap", 204},
         {NULL, 0}
     };
-    gtk_box_append(box, make_category_label("Muzik"));
-    add_effect_list(box, "music", mu, sd);
+    gtk_box_append(box, make_expander_category("Muzik", "music", mu, sd));
 
-    /* Sensor */
+    /* Sensor — special: rows carry sensor-profile data */
     static const EffectEntry se[] = {
         {"Developer", 106}, {"Gamer", 106}, {"System", 106},
         {NULL, 0}
     };
-    gtk_box_append(box, make_category_label("Sensor"));
     GtkListBox *se_list = GTK_LIST_BOX(gtk_list_box_new());
     gtk_widget_add_css_class(GTK_WIDGET(se_list), "sidebar");
     g_signal_connect(se_list, "row-activated", G_CALLBACK(on_row_activated), sd);
@@ -112,7 +105,12 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
         g_object_set_data(G_OBJECT(row), "sensor-profile", (gpointer)se[i].name);
         gtk_list_box_append(se_list, GTK_WIDGET(row));
     }
-    gtk_box_append(box, GTK_WIDGET(se_list));
+
+    GtkExpander *se_expander = GTK_EXPANDER(gtk_expander_new("Sensor"));
+    gtk_expander_set_expanded(se_expander, FALSE);
+    gtk_expander_set_child(se_expander, GTK_WIDGET(se_list));
+    gtk_widget_add_css_class(GTK_WIDGET(se_expander), "category-expander");
+    gtk_box_append(box, GTK_WIDGET(se_expander));
 
     return GTK_WIDGET(box);
 }

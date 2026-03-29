@@ -84,9 +84,8 @@ static void f87_window_init(F87Window *self)
     gtk_widget_set_margin_top(GTK_WIDGET(right_box), 12);
     gtk_widget_set_margin_bottom(GTK_WIDGET(right_box), 8);
 
-    /* Keyboard preview */
+    /* Keyboard preview — fixed size, centered */
     self->keyboard = f87_keyboard_view_new();
-    gtk_widget_set_vexpand(GTK_WIDGET(self->keyboard), TRUE);
     gtk_box_append(right_box, GTK_WIDGET(self->keyboard));
 
     /* Control panel — scrollable parameters + fixed buttons at bottom */

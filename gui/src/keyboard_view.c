@@ -85,10 +85,14 @@ static void f87_keyboard_view_init(F87KeyboardView *self)
 {
     memset(self->colors, 0, sizeof(self->colors));
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(self), draw_func, NULL, NULL);
-    /* TKL keyboard ~3.5:1 aspect ratio */
+    /* Fixed size — do not scale with window */
     gtk_widget_set_size_request(GTK_WIDGET(self), 650, 190);
     gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(self), 650);
     gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(self), 190);
+    gtk_widget_set_halign(GTK_WIDGET(self), GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(GTK_WIDGET(self), GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(GTK_WIDGET(self), FALSE);
+    gtk_widget_set_vexpand(GTK_WIDGET(self), FALSE);
 }
 
 static void f87_keyboard_view_class_init(F87KeyboardViewClass *klass)
