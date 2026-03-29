@@ -66,7 +66,7 @@
 #define F87_PLANE_B           (F87_LED_DATA_OFFSET + F87_PLANE_SIZE * 2) /* 260 */
 
 /* Custom profile (cmd 0x0A) offsets */
-#define F87_CUSTOM_LED0_OFFSET 30   /* LED[0] RGB starts here (confirmed via capture) */
+#define F87_CUSTOM_LED0_OFFSET 29   /* LED[0] RGB starts here (confirmed via capture) */
 #define F87_CUSTOM_TERMINATOR_OFFSET 514  /* 0x5A 0xA5 */
 
 /* Config response field offsets (cmd 0x84 / 0x04) */
