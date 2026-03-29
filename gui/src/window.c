@@ -30,6 +30,22 @@ static void on_effect_selected(const char *category, const char *effect_name,
     F87Window *self = user_data;
     f87_controls_set_effect(self->controls, category, effect_name, effect_id);
 
+    /* Update keyboard preview with a default color for the selected effect */
+    if (strcmp(category, "hw") == 0 || strcmp(category, "sw") == 0) {
+        f87_keyboard_view_set_color(self->keyboard, 255, 80, 0);
+    } else if (strcmp(category, "music") == 0) {
+        f87_keyboard_view_set_color(self->keyboard, 0, 128, 255);
+    } else if (strcmp(category, "sensor") == 0) {
+        f87_keyboard_view_clear(self->keyboard);
+        /* Show sensor bar preview on F-keys */
+        for (int i = 1; i <= 4; i++)
+            f87_keyboard_view_set_key(self->keyboard, i, 0, 200, 0);
+        for (int i = 5; i <= 8; i++)
+            f87_keyboard_view_set_key(self->keyboard, i, 200, 200, 0);
+        for (int i = 9; i <= 12; i++)
+            f87_keyboard_view_set_key(self->keyboard, i, 0, 100, 255);
+    }
+
     char buf[256];
     snprintf(buf, sizeof(buf), "Secilen: %s", effect_name);
     gtk_label_set_text(self->status_label, buf);

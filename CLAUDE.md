@@ -9,12 +9,15 @@ Three-layer design:
   - **animate** — software animation engine: thread management, frame loop, effect dispatch
   - **audio/spectrum** — PulseAudio capture, KissFFT analysis, beat detection (optional, BUILD_AUDIO)
 - **f87ctl** (`cli/`) — command-line tool (test/development)
-- **f87control** (`gui/`) — GTK4 GUI (not yet implemented, will be primary UI)
+- **f87control** (`gui/`) — GTK4 + libadwaita GUI (primary user interface)
+  - Sidebar layout with HW/SW/music/sensor effect categories
+  - 88-key keyboard preview (cairo), dynamic control panel, color palette
+  - Device auto-detection, effect start/stop, error status bar
 
 ## Build
 
 ```bash
-sudo apt install libusb-1.0-0-dev libjson-c-dev libpulse-dev cmake build-essential  # Debian/Ubuntu
+sudo apt install libusb-1.0-0-dev libjson-c-dev libpulse-dev libgtk-4-dev libadwaita-1-dev cmake build-essential  # Debian/Ubuntu
 mkdir build && cd build && cmake .. -DBUILD_GUI=OFF && make
 ```
 
@@ -84,6 +87,12 @@ For GUI: add `libgtk-4-dev` and `-DBUILD_GUI=ON`
 - `lib/include/f87/animate.h` — animation public API
 - `lib/include/f87/audio_types.h` — audio data types
 - `cli/src/main.c` — CLI tool: list/info/brightness/effect/color/key/animate/music/raw
+- `gui/src/main.c` — GTK4 GUI entry point
+- `gui/src/window.c` — main window layout (sidebar + paned)
+- `gui/src/sidebar.c` — effect category list
+- `gui/src/controls.c` — dynamic control panel (sliders, color, dropdowns)
+- `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget
+- `gui/src/app_state.c` — device connection, effect lifecycle
 - `tools/protocol_notes.md` — full protocol documentation
 - `tools/*.pcap` — USB capture files from Windows
 - `tools/*.py` — capture analysis scripts
@@ -142,7 +151,10 @@ cd build && ctest --output-on-failure
   - Plugin-based sensor interface with built-in sensors (cpu_temp, cpu_load, gpu_temp, ram_usage)
   - JSON config for key-sensor mappings, color/bar display modes
   - Built-in profiles: developer, gamer, system
-- Faz 5: GTK4 GUI (not started — will be primary user interface)
+- Faz 5: GTK4 GUI (complete)
+  - Sidebar + keyboard preview + dynamic controls + color palette
+  - All effect categories: HW, SW, music, sensor
+  - Device auto-detection, error handling, status bar
 - Faz 6: Daemon mode, profiles, wireless support (not started)
 
 ## Known Limitations (Firmware)
