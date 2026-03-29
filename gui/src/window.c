@@ -1,5 +1,6 @@
 #include "window.h"
 #include "sidebar.h"
+#include "app_state.h"
 #include <stdio.h>
 
 struct _F87Window {
@@ -8,6 +9,7 @@ struct _F87Window {
     GtkBox *sidebar_box;
     GtkBox *main_box;
     GtkLabel *status_label;
+    f87_app_state_t app_state;
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
@@ -79,11 +81,22 @@ static void f87_window_init(F87Window *self)
 
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(self),
                                        GTK_WIDGET(self->paned));
+
+    /* Initialize device connection */
+    f87_app_state_init(&self->app_state);
+    gtk_label_set_text(self->status_label, self->app_state.status_text);
+}
+
+static void f87_window_dispose(GObject *obj)
+{
+    F87Window *self = F87_WINDOW(obj);
+    f87_app_state_destroy(&self->app_state);
+    G_OBJECT_CLASS(f87_window_parent_class)->dispose(obj);
 }
 
 static void f87_window_class_init(F87WindowClass *klass)
 {
-    (void)klass;
+    G_OBJECT_CLASS(klass)->dispose = f87_window_dispose;
 }
 
 F87Window *f87_window_new(AdwApplication *app)
