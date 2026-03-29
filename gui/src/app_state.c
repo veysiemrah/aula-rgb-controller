@@ -1,5 +1,4 @@
 #include "app_state.h"
-#include "protocol.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -9,68 +8,66 @@ int f87_app_state_init(f87_app_state_t *state)
     state->status = F87_GUI_IDLE;
     snprintf(state->status_text, sizeof(state->status_text), "Baslatiliyor...");
 
-    state->ctx = f87_init();
-    if (!state->ctx) {
+    state->client = f87_client_connect();
+    if (!state->client) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "libf87 baslatilamadi");
+                 "Daemon'a baglanilamadi");
         state->status = F87_GUI_ERROR;
         return -1;
     }
 
-    return f87_app_state_rescan(state);
+    f87_client_status_t st;
+    if (f87_client_get_status(state->client, &st) < 0) {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Daemon durumu alinamadi");
+        state->status = F87_GUI_ERROR;
+        return -1;
+    }
+
+    state->device_connected = st.connected;
+    if (st.connected) {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Bagli (daemon)");
+        state->status = F87_GUI_IDLE;
+    } else {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Klavye bulunamadi");
+        state->status = F87_GUI_ERROR;
+    }
+
+    return 0;
 }
 
 void f87_app_state_destroy(f87_app_state_t *state)
 {
-    if (state->anim) {
-        f87_anim_stop(state->anim);
-        state->anim = NULL;
-    }
-    if (state->dev) {
-        f87_close(state->dev);
-        state->dev = NULL;
-    }
-    if (state->dev_list) {
-        f87_free_device_list(state->dev_list);
-        state->dev_list = NULL;
-    }
-    if (state->ctx) {
-        f87_exit(state->ctx);
-        state->ctx = NULL;
+    if (state->client) {
+        f87_client_disconnect(state->client);
+        state->client = NULL;
     }
 }
 
 int f87_app_state_rescan(f87_app_state_t *state)
 {
-    /* Close existing */
-    if (state->dev) {
-        f87_close(state->dev);
-        state->dev = NULL;
-    }
-    if (state->dev_list) {
-        f87_free_device_list(state->dev_list);
-        state->dev_list = NULL;
+    if (!state->client) return -1;
+
+    int rc = f87_client_rescan(state->client);
+    if (rc < 0) {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Tarama basarisiz");
+        state->status = F87_GUI_ERROR;
+        return -1;
     }
 
-    int rc = f87_find_devices(state->ctx, &state->dev_list, &state->dev_count);
-    if (rc < 0 || state->dev_count == 0) {
+    state->device_connected = f87_client_is_connected(state->client) > 0;
+    if (state->device_connected) {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Bagli (daemon)");
+        state->status = F87_GUI_IDLE;
+    } else {
         snprintf(state->status_text, sizeof(state->status_text),
                  "Klavye bulunamadi");
         state->status = F87_GUI_ERROR;
-        return -1;
     }
-
-    state->dev = f87_open(state->ctx, &state->dev_list[0]);
-    if (!state->dev) {
-        snprintf(state->status_text, sizeof(state->status_text),
-                 "Klavye acilamadi");
-        state->status = F87_GUI_ERROR;
-        return -1;
-    }
-
-    snprintf(state->status_text, sizeof(state->status_text),
-             "Bagli: %s", state->dev_list[0].product);
-    state->status = F87_GUI_IDLE;
     return 0;
 }
 
@@ -78,36 +75,19 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
                             uint8_t brightness, uint8_t speed,
                             uint8_t colorful, uint8_t r, uint8_t g, uint8_t b)
 {
-    if (!state->dev) {
-        snprintf(state->status_text, sizeof(state->status_text),
-                 "Klavye bagli degil");
-        state->status = F87_GUI_ERROR;
-        return -1;
-    }
+    if (!state->client) return -1;
 
-    /* Stop any running animation first */
-    if (state->anim) {
-        f87_anim_stop(state->anim);
-        state->anim = NULL;
-    }
-
-    f87_effect effect = {0};
-    effect.mode = (f87_mode)mode_id;
-    effect.brightness = brightness;
-    effect.speed = speed;
-    effect.colorful = colorful;
-    effect.color1 = (f87_color){r, g, b};
-
-    int rc = f87_set_effect(state->dev, &effect);
+    int rc = f87_client_set_effect(state->client, mode_id, brightness, speed,
+                                    colorful, r, g, b);
     if (rc < 0) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Efekt gonderilemedi: %s", f87_strerror(rc));
+                 "Efekt gonderilemedi");
         state->status = F87_GUI_ERROR;
         return rc;
     }
 
     snprintf(state->status_text, sizeof(state->status_text),
-             "%s calisiyor", f87_mode_name(effect.mode));
+             "%s calisiyor", f87_mode_name((f87_mode)mode_id));
     state->status = F87_GUI_RUNNING;
     state->current_effect_id = mode_id;
     strncpy(state->current_category, "hw", sizeof(state->current_category));
@@ -117,21 +97,26 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
 int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
                             const f87_anim_config_t *config)
 {
-    if (!state->dev) {
-        snprintf(state->status_text, sizeof(state->status_text),
-                 "Klavye bagli degil");
-        state->status = F87_GUI_ERROR;
-        return -1;
+    if (!state->client) return -1;
+
+    int rc;
+    if (effect_id == F87_SW_SENSOR) {
+        rc = f87_client_set_sensor_effect(state->client,
+                                           config->sensor_profile,
+                                           config->sensor_config_path);
+    } else if (effect_id >= 200) {
+        rc = f87_client_set_music_effect(state->client, effect_id,
+                                          config->brightness,
+                                          config->color[0], config->color[1],
+                                          config->color[2], config->gain);
+    } else {
+        rc = f87_client_set_sw_effect(state->client, effect_id,
+                                       config->brightness, config->speed,
+                                       config->color[0], config->color[1],
+                                       config->color[2], config->fps);
     }
 
-    /* Stop any running animation first */
-    if (state->anim) {
-        f87_anim_stop(state->anim);
-        state->anim = NULL;
-    }
-
-    state->anim = f87_anim_start(state->dev, (f87_sw_effect_id)effect_id, config);
-    if (!state->anim) {
+    if (rc < 0) {
         snprintf(state->status_text, sizeof(state->status_text),
                  "Animasyon baslatilamadi");
         state->status = F87_GUI_ERROR;
@@ -147,15 +132,14 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
 
 int f87_app_state_stop(f87_app_state_t *state)
 {
-    if (state->anim) {
-        int rc = f87_anim_stop(state->anim);
-        state->anim = NULL;
-        if (rc < 0) {
-            snprintf(state->status_text, sizeof(state->status_text),
-                     "Durdurma hatasi: %s", f87_strerror(rc));
-            state->status = F87_GUI_ERROR;
-            return rc;
-        }
+    if (!state->client) return -1;
+
+    int rc = f87_client_stop(state->client);
+    if (rc < 0) {
+        snprintf(state->status_text, sizeof(state->status_text),
+                 "Durdurma hatasi");
+        state->status = F87_GUI_ERROR;
+        return rc;
     }
 
     snprintf(state->status_text, sizeof(state->status_text), "Bekleniyor");

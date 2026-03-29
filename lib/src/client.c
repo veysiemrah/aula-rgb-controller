@@ -1,0 +1,296 @@
+#include "f87/client.h"
+#include <systemd/sd-bus.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+
+#define DBUS_DEST  "org.f87.Control"
+#define DBUS_PATH  "/org/f87/Control"
+#define DBUS_IFACE "org.f87.Control"
+
+struct f87_client {
+    sd_bus *bus;
+    sd_bus_slot *device_slot;
+    sd_bus_slot *device_slot2;
+    sd_bus_slot *effect_slot;
+    f87_client_device_cb device_cb;
+    void *device_cb_data;
+    f87_client_effect_cb effect_cb;
+    void *effect_cb_data;
+};
+
+f87_client *f87_client_connect(void)
+{
+    f87_client *c = calloc(1, sizeof(*c));
+    if (!c) return NULL;
+
+    int r = sd_bus_open_user(&c->bus);
+    if (r < 0) {
+        free(c);
+        return NULL;
+    }
+
+    return c;
+}
+
+void f87_client_disconnect(f87_client *client)
+{
+    if (!client) return;
+    if (client->device_slot)
+        sd_bus_slot_unref(client->device_slot);
+    if (client->device_slot2)
+        sd_bus_slot_unref(client->device_slot2);
+    if (client->effect_slot)
+        sd_bus_slot_unref(client->effect_slot);
+    if (client->bus)
+        sd_bus_unref(client->bus);
+    free(client);
+}
+
+/* Helper: call a method, read boolean return. Returns 0 on success. */
+static int call_bool(f87_client *c, const char *method,
+                      const char *types, ...)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *msg = NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_message_new_method_call(c->bus, &msg,
+        DBUS_DEST, DBUS_PATH, DBUS_IFACE, method);
+    if (r < 0) return -1;
+
+    if (types && types[0]) {
+        va_list ap;
+        va_start(ap, types);
+        r = sd_bus_message_appendv(msg, types, ap);
+        va_end(ap);
+        if (r < 0) {
+            sd_bus_message_unref(msg);
+            return -1;
+        }
+    }
+
+    r = sd_bus_call(c->bus, msg, 0, &error, &reply);
+    sd_bus_message_unref(msg);
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    int result = 0;
+    sd_bus_message_read(reply, "b", &result);
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return result ? 0 : -1;
+}
+
+int f87_client_set_effect(f87_client *client, int effect_id,
+                           uint8_t brightness, uint8_t speed,
+                           uint8_t colorful, uint8_t r, uint8_t g, uint8_t b)
+{
+    return call_bool(client, "SetEffect", "iyybyyy",
+                     (int32_t)effect_id, brightness, speed,
+                     (int)colorful, r, g, b);
+}
+
+int f87_client_set_sw_effect(f87_client *client, int effect_id,
+                              uint8_t brightness, uint8_t speed,
+                              uint8_t r, uint8_t g, uint8_t b, int fps)
+{
+    return call_bool(client, "SetSwEffect", "iyyyyyi",
+                     (int32_t)effect_id, brightness, speed,
+                     r, g, b, (int32_t)fps);
+}
+
+int f87_client_set_music_effect(f87_client *client, int effect_id,
+                                 uint8_t brightness,
+                                 uint8_t r, uint8_t g, uint8_t b, double gain)
+{
+    return call_bool(client, "SetMusicEffect", "iyyyd",
+                     (int32_t)effect_id, brightness, r, g, b, gain);
+}
+
+int f87_client_set_sensor_effect(f87_client *client,
+                                  const char *profile,
+                                  const char *config_path)
+{
+    return call_bool(client, "SetSensorEffect", "ss",
+                     profile ? profile : "",
+                     config_path ? config_path : "");
+}
+
+int f87_client_set_color(f87_client *client, uint8_t r, uint8_t g, uint8_t b)
+{
+    return call_bool(client, "SetColor", "yyy", r, g, b);
+}
+
+int f87_client_set_brightness(f87_client *client, uint8_t level)
+{
+    return call_bool(client, "SetBrightness", "y", level);
+}
+
+int f87_client_stop(f87_client *client)
+{
+    return call_bool(client, "Stop", NULL);
+}
+
+int f87_client_off(f87_client *client)
+{
+    return call_bool(client, "Off", NULL);
+}
+
+int f87_client_rescan(f87_client *client)
+{
+    return call_bool(client, "Rescan", NULL);
+}
+
+int f87_client_get_status(f87_client *client, f87_client_status_t *status)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_call_method(client->bus, DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                               "GetStatus", &error, &reply, "");
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    memset(status, 0, sizeof(*status));
+
+    r = sd_bus_message_enter_container(reply, 'a', "{sv}");
+    if (r < 0) goto done;
+
+    while ((r = sd_bus_message_enter_container(reply, 'e', "sv")) > 0) {
+        const char *key = NULL;
+        sd_bus_message_read(reply, "s", &key);
+
+        if (strcmp(key, "Connected") == 0) {
+            int val = 0;
+            sd_bus_message_read(reply, "v", "b", &val);
+            status->connected = val;
+        } else if (strcmp(key, "ActiveEffect") == 0) {
+            int32_t val = 0;
+            sd_bus_message_read(reply, "v", "i", &val);
+            status->active_effect = val;
+        } else if (strcmp(key, "Category") == 0) {
+            const char *val = NULL;
+            sd_bus_message_read(reply, "v", "s", &val);
+            if (val)
+                strncpy(status->category, val, sizeof(status->category) - 1);
+        } else {
+            sd_bus_message_skip(reply, "v");
+        }
+
+        sd_bus_message_exit_container(reply);
+    }
+
+    sd_bus_message_exit_container(reply);
+
+done:
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+    return 0;
+}
+
+int f87_client_is_connected(f87_client *client)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    int val = 0;
+
+    int r = sd_bus_get_property_trivial(client->bus, DBUS_DEST, DBUS_PATH,
+                                         DBUS_IFACE, "Connected", &error,
+                                         'b', &val);
+    sd_bus_error_free(&error);
+    return r < 0 ? -1 : val;
+}
+
+/* Signal match callbacks */
+static int on_device_signal(sd_bus_message *msg, void *userdata,
+                             sd_bus_error *error)
+{
+    (void)error;
+    f87_client *c = userdata;
+    if (!c->device_cb) return 0;
+
+    const char *member = sd_bus_message_get_member(msg);
+    if (strcmp(member, "DeviceConnected") == 0) {
+        const char *product = NULL;
+        uint16_t vid = 0, pid = 0;
+        sd_bus_message_read(msg, "sqq", &product, &vid, &pid);
+        c->device_cb(true, product, c->device_cb_data);
+    } else if (strcmp(member, "DeviceDisconnected") == 0) {
+        c->device_cb(false, NULL, c->device_cb_data);
+    }
+    return 0;
+}
+
+static int on_effect_signal(sd_bus_message *msg, void *userdata,
+                             sd_bus_error *error)
+{
+    (void)error;
+    f87_client *c = userdata;
+    if (!c->effect_cb) return 0;
+
+    int32_t effect_id = 0;
+    const char *category = NULL;
+    sd_bus_message_read(msg, "is", &effect_id, &category);
+    c->effect_cb(effect_id, category, c->effect_cb_data);
+    return 0;
+}
+
+int f87_client_on_device_change(f87_client *client,
+                                 f87_client_device_cb cb, void *userdata)
+{
+    client->device_cb = cb;
+    client->device_cb_data = userdata;
+
+    if (client->device_slot) {
+        sd_bus_slot_unref(client->device_slot);
+        client->device_slot = NULL;
+    }
+    if (client->device_slot2) {
+        sd_bus_slot_unref(client->device_slot2);
+        client->device_slot2 = NULL;
+    }
+
+    int r = sd_bus_match_signal(client->bus, &client->device_slot,
+                                 DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                                 "DeviceConnected", on_device_signal, client);
+    if (r < 0) return -1;
+
+    r = sd_bus_match_signal(client->bus, &client->device_slot2,
+                             DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                             "DeviceDisconnected", on_device_signal, client);
+    return r < 0 ? -1 : 0;
+}
+
+int f87_client_on_effect_change(f87_client *client,
+                                 f87_client_effect_cb cb, void *userdata)
+{
+    client->effect_cb = cb;
+    client->effect_cb_data = userdata;
+
+    if (client->effect_slot) {
+        sd_bus_slot_unref(client->effect_slot);
+        client->effect_slot = NULL;
+    }
+
+    return sd_bus_match_signal(client->bus, &client->effect_slot,
+                                DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                                "EffectChanged", on_effect_signal, client);
+}
+
+int f87_client_process(f87_client *client)
+{
+    int r;
+    while ((r = sd_bus_process(client->bus, NULL)) > 0)
+        ;
+    return 0;
+}
+
+int f87_client_get_fd(f87_client *client)
+{
+    return sd_bus_get_fd(client->bus);
+}

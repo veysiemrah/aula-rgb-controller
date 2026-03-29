@@ -34,8 +34,16 @@ target_include_directories(test_sensor PRIVATE lib/src lib/include)
 target_link_libraries(test_sensor Threads::Threads)
 add_test(NAME sensor_tests COMMAND test_sensor)
 
+pkg_check_modules(SYSTEMD libsystemd)
+if(SYSTEMD_FOUND)
+    add_executable(test_daemon tests/test_daemon.c)
+    target_link_libraries(test_daemon PRIVATE f87)
+    add_test(NAME daemon_tests COMMAND test_daemon)
+endif()
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
+option(BUILD_DAEMON "Build the f87d D-Bus daemon" ON)
 
 add_subdirectory(vendor/kissfft)
 add_subdirectory(lib)
@@ -46,4 +54,8 @@ endif()
 
 if(BUILD_GUI)
     add_subdirectory(gui)
+endif()
+
+if(BUILD_DAEMON)
+    add_subdirectory(daemon)
 endif()
