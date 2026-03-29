@@ -211,7 +211,9 @@ static void *anim_thread_func(void *arg)
         }
     }
 
-    f87_direct_mode_disable(ctx->dev);
+    /* Only disable direct mode if we exited cleanly (not IO error) */
+    if (atomic_load(&ctx->error) == 0)
+        f87_direct_mode_disable(ctx->dev);
     return NULL;
 }
 

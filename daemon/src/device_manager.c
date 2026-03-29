@@ -77,11 +77,13 @@ int f87d_devmgr_poll(f87d_device_manager_t *mgr,
 {
     if (mgr->connected) {
         if (!f87d_devmgr_check_alive(mgr)) {
-            f87_close(mgr->dev);
-            mgr->dev = NULL;
+            /* Stop animations BEFORE closing device —
+             * animation thread holds a reference to dev */
             mgr->connected = false;
             if (cbs && cbs->on_disconnected)
                 cbs->on_disconnected(cbs->userdata);
+            f87_close(mgr->dev);
+            mgr->dev = NULL;
         }
         return 0;
     }
