@@ -1,5 +1,6 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SYSTEMD REQUIRED libsystemd)
+pkg_check_modules(JSON_C REQUIRED json-c)
 
 add_executable(f87d
     src/main.c
@@ -7,10 +8,12 @@ add_executable(f87d
     src/effect_manager.c
     src/dbus_interface.c
     src/idle_monitor.c
+    src/profile_manager.c
 )
 
 target_include_directories(f87d PRIVATE
     ${SYSTEMD_INCLUDE_DIRS}
+    ${JSON_C_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/lib/include
     ${CMAKE_SOURCE_DIR}/lib/src
 )
@@ -18,6 +21,7 @@ target_include_directories(f87d PRIVATE
 target_link_libraries(f87d PRIVATE
     f87
     ${SYSTEMD_LIBRARIES}
+    ${JSON_C_LIBRARIES}
 )
 
 target_compile_options(f87d PRIVATE

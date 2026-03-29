@@ -47,6 +47,7 @@ int f87d_effmgr_set_hw(f87d_effect_manager_t *mgr, f87_device *dev,
     mgr->color[0] = r;
     mgr->color[1] = g;
     mgr->color[2] = b;
+    mgr->colorful = colorful;
     return 0;
 }
 
@@ -103,6 +104,7 @@ int f87d_effmgr_set_music(f87d_effect_manager_t *mgr, f87_device *dev,
     mgr->color[0] = r;
     mgr->color[1] = g;
     mgr->color[2] = b;
+    mgr->gain = gain;
     return 0;
 }
 
@@ -125,6 +127,34 @@ int f87d_effmgr_set_sensor(f87d_effect_manager_t *mgr, f87_device *dev,
 
     mgr->category = F87D_CAT_SENSOR;
     mgr->effect_id = F87_SW_SENSOR;
+    if (profile)
+        strncpy(mgr->sensor_profile, profile, sizeof(mgr->sensor_profile) - 1);
+    else
+        mgr->sensor_profile[0] = '\0';
+    if (config_path)
+        strncpy(mgr->sensor_config_path, config_path, sizeof(mgr->sensor_config_path) - 1);
+    else
+        mgr->sensor_config_path[0] = '\0';
+    return 0;
+}
+
+int f87d_effmgr_set_side_light(f87d_effect_manager_t *mgr, f87_device *dev,
+                                uint8_t mode)
+{
+    if (!dev) return -1;
+    int rc = f87_set_side_light(dev, (f87_side_mode)mode);
+    if (rc < 0) return rc;
+    mgr->side_light = mode;
+    return 0;
+}
+
+int f87d_effmgr_set_battery_light(f87d_effect_manager_t *mgr, f87_device *dev,
+                                   uint8_t mode)
+{
+    if (!dev) return -1;
+    int rc = f87_set_battery_light(dev, (f87_side_mode)mode);
+    if (rc < 0) return rc;
+    mgr->battery_light = mode;
     return 0;
 }
 

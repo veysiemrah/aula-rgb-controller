@@ -48,6 +48,12 @@ static void usage(const char *progname)
         "  animate <effect> [RRGGBB] [opts]   Software animation\n"
         "  music <mode> [opts]               Music-reactive mode\n"
         "  stop                              Stop active effect (daemon mode)\n"
+        "  profile save <name>              Save current state as profile\n"
+        "  profile load <name>              Load and apply a profile\n"
+        "  profile delete <name>            Delete a profile\n"
+        "  profile list                     List saved profiles\n"
+        "  sidelight <0-4>                  Set side light mode\n"
+        "  batterylight <0-4>               Set battery light mode\n"
         "\n"
         "Options:\n"
         "  --direct                          Bypass daemon, use direct USB\n"
@@ -954,6 +960,73 @@ static int dispatch_client(f87_client *client, const char *cmd,
     } else if (strcmp(cmd, "stop") == 0) {
         f87_client_stop(client);
         printf("Effect stopped.\n");
+        return 0;
+
+    } else if (strcmp(cmd, "profile") == 0) {
+        if (argc < 1) {
+            fprintf(stderr, "Usage: f87ctl profile <save|load|delete|list> [name]\n");
+            return 1;
+        }
+        const char *sub = argv[0];
+        if (strcmp(sub, "save") == 0) {
+            if (argc < 2) { fprintf(stderr, "Usage: f87ctl profile save <name>\n"); return 1; }
+            if (f87_client_save_profile(client, argv[1]) < 0) {
+                fprintf(stderr, "Failed to save profile.\n"); return 1;
+            }
+            printf("Profile '%s' saved.\n", argv[1]);
+            return 0;
+        } else if (strcmp(sub, "load") == 0) {
+            if (argc < 2) { fprintf(stderr, "Usage: f87ctl profile load <name>\n"); return 1; }
+            if (f87_client_load_profile(client, argv[1]) < 0) {
+                fprintf(stderr, "Failed to load profile '%s'.\n", argv[1]); return 1;
+            }
+            printf("Profile '%s' loaded.\n", argv[1]);
+            return 0;
+        } else if (strcmp(sub, "delete") == 0) {
+            if (argc < 2) { fprintf(stderr, "Usage: f87ctl profile delete <name>\n"); return 1; }
+            if (f87_client_delete_profile(client, argv[1]) < 0) {
+                fprintf(stderr, "Failed to delete profile.\n"); return 1;
+            }
+            printf("Profile '%s' deleted.\n", argv[1]);
+            return 0;
+        } else if (strcmp(sub, "list") == 0) {
+            char **names = NULL;
+            int count = 0;
+            if (f87_client_list_profiles(client, &names, &count) < 0) {
+                fprintf(stderr, "Failed to list profiles.\n"); return 1;
+            }
+            if (count == 0) {
+                printf("No profiles saved.\n");
+            } else {
+                printf("Profiles (%d):\n", count);
+                for (int i = 0; i < count; i++)
+                    printf("  %s\n", names[i]);
+            }
+            f87_client_free_profile_list(names, count);
+            return 0;
+        } else {
+            fprintf(stderr, "Unknown profile subcommand '%s'.\n", sub);
+            return 1;
+        }
+
+    } else if (strcmp(cmd, "sidelight") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl sidelight <0-4>\n"); return 1; }
+        int mode = atoi(argv[0]);
+        if (mode < 0 || mode > 4) { fprintf(stderr, "Mode must be 0-4.\n"); return 1; }
+        if (f87_client_set_side_light(client, (uint8_t)mode) < 0) {
+            fprintf(stderr, "Failed to set side light.\n"); return 1;
+        }
+        printf("Side light set to %d.\n", mode);
+        return 0;
+
+    } else if (strcmp(cmd, "batterylight") == 0) {
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl batterylight <0-4>\n"); return 1; }
+        int mode = atoi(argv[0]);
+        if (mode < 0 || mode > 4) { fprintf(stderr, "Mode must be 0-4.\n"); return 1; }
+        if (f87_client_set_battery_light(client, (uint8_t)mode) < 0) {
+            fprintf(stderr, "Failed to set battery light.\n"); return 1;
+        }
+        printf("Battery light set to %d.\n", mode);
         return 0;
 
     } else if (strcmp(cmd, "raw") == 0) {

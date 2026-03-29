@@ -19,6 +19,12 @@ typedef struct {
     uint8_t brightness;
     uint8_t speed;
     uint8_t color[3];
+    uint8_t colorful;
+    uint8_t side_light;
+    uint8_t battery_light;
+    double gain;
+    char sensor_profile[64];
+    char sensor_config_path[256];
 } f87d_effect_manager_t;
 
 void f87d_effmgr_init(f87d_effect_manager_t *mgr);
@@ -40,6 +46,11 @@ int f87d_effmgr_set_sensor(f87d_effect_manager_t *mgr, f87_device *dev,
                             const char *profile, const char *config_path);
 
 int f87d_effmgr_stop(f87d_effect_manager_t *mgr);
+
+int f87d_effmgr_set_side_light(f87d_effect_manager_t *mgr, f87_device *dev,
+                                uint8_t mode);
+int f87d_effmgr_set_battery_light(f87d_effect_manager_t *mgr, f87_device *dev,
+                                   uint8_t mode);
 
 const char *f87d_effmgr_category_str(f87d_effect_category_t cat);
 bool f87d_effmgr_has_sw_running(const f87d_effect_manager_t *mgr);

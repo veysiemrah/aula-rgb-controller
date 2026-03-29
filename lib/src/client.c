@@ -206,6 +206,77 @@ int f87_client_is_connected(f87_client *client)
     return r < 0 ? -1 : val;
 }
 
+int f87_client_set_side_light(f87_client *client, uint8_t mode)
+{
+    return call_bool(client, "SetSideLight", "y", mode);
+}
+
+int f87_client_set_battery_light(f87_client *client, uint8_t mode)
+{
+    return call_bool(client, "SetBatteryLight", "y", mode);
+}
+
+int f87_client_save_profile(f87_client *client, const char *name)
+{
+    return call_bool(client, "SaveProfile", "s", name);
+}
+
+int f87_client_load_profile(f87_client *client, const char *name)
+{
+    return call_bool(client, "LoadProfile", "s", name);
+}
+
+int f87_client_delete_profile(f87_client *client, const char *name)
+{
+    return call_bool(client, "DeleteProfile", "s", name);
+}
+
+int f87_client_list_profiles(f87_client *client, char ***names, int *count)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = NULL;
+
+    int r = sd_bus_call_method(client->bus, DBUS_DEST, DBUS_PATH, DBUS_IFACE,
+                               "ListProfiles", &error, &reply, "");
+    if (r < 0) {
+        sd_bus_error_free(&error);
+        *names = NULL;
+        *count = 0;
+        return -1;
+    }
+
+    r = sd_bus_message_enter_container(reply, 'a', "s");
+    if (r < 0) { sd_bus_message_unref(reply); sd_bus_error_free(&error); return -1; }
+
+    int n = 0, cap = 16;
+    char **list = malloc((size_t)cap * sizeof(char *));
+
+    const char *name_str = NULL;
+    while (sd_bus_message_read(reply, "s", &name_str) > 0) {
+        if (n >= cap) {
+            cap *= 2;
+            list = realloc(list, (size_t)cap * sizeof(char *));
+        }
+        list[n++] = strdup(name_str);
+    }
+
+    sd_bus_message_exit_container(reply);
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+
+    *names = list;
+    *count = n;
+    return 0;
+}
+
+void f87_client_free_profile_list(char **names, int count)
+{
+    if (!names) return;
+    for (int i = 0; i < count; i++)
+        free(names[i]);
+    free(names);
+}
+
 /* Signal match callbacks */
 static int on_device_signal(sd_bus_message *msg, void *userdata,
                              sd_bus_error *error)
