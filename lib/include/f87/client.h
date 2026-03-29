@@ -40,6 +40,17 @@ int f87_client_get_status(f87_client *client, f87_client_status_t *status);
 int f87_client_is_connected(f87_client *client);
 int f87_client_rescan(f87_client *client);
 
+/* Side/battery light */
+int f87_client_set_side_light(f87_client *client, uint8_t mode);
+int f87_client_set_battery_light(f87_client *client, uint8_t mode);
+
+/* Profiles */
+int f87_client_save_profile(f87_client *client, const char *name);
+int f87_client_load_profile(f87_client *client, const char *name);
+int f87_client_delete_profile(f87_client *client, const char *name);
+int f87_client_list_profiles(f87_client *client, char ***names, int *count);
+void f87_client_free_profile_list(char **names, int count);
+
 typedef void (*f87_client_device_cb)(bool connected, const char *product,
                                       void *userdata);
 typedef void (*f87_client_effect_cb)(int effect_id, const char *category,
