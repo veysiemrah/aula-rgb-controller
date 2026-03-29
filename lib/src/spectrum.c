@@ -4,6 +4,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -120,15 +121,38 @@ void f87_spectrum_analyze_ctx(f87_spectrum_ctx_t *ctx, const float *samples,
     }
 }
 
-static __thread f87_spectrum_ctx_t *tl_ctx = NULL;
+static pthread_key_t tl_ctx_key;
+static pthread_once_t tl_ctx_once = PTHREAD_ONCE_INIT;
+
+static void tl_ctx_destructor(void *p)
+{
+    f87_spectrum_ctx_t *ctx = p;
+    if (ctx) {
+        f87_spectrum_destroy(ctx);
+        free(ctx);
+    }
+}
+
+static void tl_ctx_make_key(void)
+{
+    pthread_key_create(&tl_ctx_key, tl_ctx_destructor);
+}
 
 void f87_spectrum_analyze(const float *samples, int count, f87_audio_data_t *out)
 {
-    if (!tl_ctx) {
-        tl_ctx = calloc(1, sizeof(f87_spectrum_ctx_t));
-        f87_spectrum_init(tl_ctx);
+    pthread_once(&tl_ctx_once, tl_ctx_make_key);
+
+    f87_spectrum_ctx_t *ctx = pthread_getspecific(tl_ctx_key);
+    if (!ctx) {
+        ctx = calloc(1, sizeof(f87_spectrum_ctx_t));
+        if (!ctx) {
+            memset(out, 0, sizeof(*out));
+            return;
+        }
+        f87_spectrum_init(ctx);
+        pthread_setspecific(tl_ctx_key, ctx);
     }
-    f87_spectrum_analyze_ctx(tl_ctx, samples, count, out);
+    f87_spectrum_analyze_ctx(ctx, samples, count, out);
 }
 
 #endif /* F87_HAS_AUDIO */
