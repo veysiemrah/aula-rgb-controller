@@ -25,6 +25,7 @@ add_library(f87 SHARED
     src/effects_sw_reactive.c
     src/sensor.c
     src/client.c
+    src/logger.c
 )
 
 target_include_directories(f87
@@ -49,6 +50,8 @@ target_compile_options(f87
     PRIVATE
         ${LIBUSB_CFLAGS_OTHER}
 )
+
+target_compile_definitions(f87 PRIVATE F87_HAS_JOURNAL=1)
 
 # JSON config support (optional, for sensor profiles)
 pkg_check_modules(JSON_C json-c)
