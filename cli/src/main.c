@@ -7,6 +7,7 @@
 
 #include <f87/f87.h>
 #include <f87/client.h>
+#include <f87/logger.h>
 
 /* Internal header -- needed only for raw send/listen (f87_pkt_send/recv) */
 #include "protocol.h"
@@ -99,7 +100,7 @@ static f87_device *open_first_device(f87_ctx *ctx,
 
     int rc = f87_find_devices(ctx, &list, &count);
     if (rc < 0) {
-        fprintf(stderr, "Error finding devices: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_DEVICE, rc, "Finding devices: %s", f87_strerror(rc));
         return NULL;
     }
     if (count == 0) {
@@ -131,7 +132,7 @@ static int cmd_list(f87_ctx *ctx)
 
     int rc = f87_find_devices(ctx, &list, &count);
     if (rc < 0) {
-        fprintf(stderr, "Error finding devices: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_DEVICE, rc, "Finding devices: %s", f87_strerror(rc));
         return 1;
     }
     if (count == 0) {
@@ -221,7 +222,7 @@ static int cmd_brightness(f87_ctx *ctx, int argc, char **argv)
 
     int rc = f87_set_brightness(dev, (uint8_t)level);
     if (rc < 0) {
-        fprintf(stderr, "Error setting brightness: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_USB, rc, "Setting brightness: %s", f87_strerror(rc));
         f87_close(dev);
         f87_free_device_list(list);
         return 1;
@@ -243,7 +244,7 @@ static int cmd_off(f87_ctx *ctx)
 
     int rc = f87_lights_off(dev);
     if (rc < 0) {
-        fprintf(stderr, "Error turning off lights: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_USB, rc, "Turning off lights: %s", f87_strerror(rc));
         f87_close(dev);
         f87_free_device_list(list);
         return 1;
@@ -277,7 +278,7 @@ static int cmd_color(f87_ctx *ctx, int argc, char **argv)
     f87_set_all_keys(dev, color);
     int rc = f87_apply(dev);
     if (rc < 0) {
-        fprintf(stderr, "Error applying colour: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_USB, rc, "Applying colour: %s", f87_strerror(rc));
         f87_close(dev);
         f87_free_device_list(list);
         return 1;
@@ -364,7 +365,7 @@ static int cmd_effect(f87_ctx *ctx, int argc, char **argv)
 
     int rc = f87_set_effect(dev, &effect);
     if (rc < 0) {
-        fprintf(stderr, "Error setting effect: %s\n", f87_strerror(rc));
+        F87_ERROR_EC(F87_SRC_EFFECT, rc, "Setting effect: %s", f87_strerror(rc));
         f87_close(dev);
         f87_free_device_list(list);
         return 1;
@@ -411,7 +412,7 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         f87_set_all_keys(dev, color);
         int rc = f87_apply(dev);
         if (rc < 0) {
-            fprintf(stderr, "Error applying key colours: %s\n",
+            F87_ERROR_EC(F87_SRC_USB, rc, "Applying key colours: %s",
                     f87_strerror(rc));
             f87_close(dev);
             f87_free_device_list(list);
@@ -467,7 +468,7 @@ static int cmd_key(f87_ctx *ctx, int argc, char **argv)
         f87_set_key_color(dev, (uint8_t)key_id, color);
         int rc = f87_apply(dev);
         if (rc < 0) {
-            fprintf(stderr, "Error applying key colours: %s\n",
+            F87_ERROR_EC(F87_SRC_USB, rc, "Applying key colours: %s",
                     f87_strerror(rc));
             f87_close(dev);
             f87_free_device_list(list);
@@ -648,7 +649,7 @@ static int cmd_animate(f87_ctx *ctx, int argc, char **argv)
     g_anim_ctx = NULL;
 
     if (err < 0)
-        fprintf(stderr, "Animation error: %s\n", f87_strerror(err));
+        F87_ERROR_EC(F87_SRC_EFFECT, err, "Animation error: %s", f87_strerror(err));
 
     f87_close(dev);
     f87_free_device_list(g_anim_list);
@@ -1065,6 +1066,8 @@ static int dispatch_client(f87_client *client, const char *cmd,
 
 int main(int argc, char **argv)
 {
+    f87_log_init(F87_LOG_STDERR);
+
     if (argc < 2) {
         usage(argv[0]);
         return 1;
