@@ -126,6 +126,7 @@ int main(int argc, char **argv)
         .effmgr = &g_effmgr,
         .idle = &g_idle,
         .error_ring = &g_error_ring,
+        .dev_cbs = &g_dev_cbs,
     };
 
     r = f87d_dbus_register(bus, &g_dbus_ctx);
@@ -180,11 +181,11 @@ int main(int argc, char **argv)
     }
 
     F87_INFO(F87_SRC_DBUS, "Shutting down");
-    f87d_effmgr_destroy(&g_effmgr);
     sd_bus_release_name(bus, "org.f87.Control");
     sd_bus_unref(bus);
+    f87d_effmgr_destroy(&g_effmgr);
     f87d_devmgr_destroy(&g_devmgr);
-    f87_log_shutdown();
     f87d_error_ring_destroy(&g_error_ring);
+    f87_log_shutdown();
     return EXIT_SUCCESS;
 }

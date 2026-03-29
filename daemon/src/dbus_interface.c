@@ -226,9 +226,11 @@ static int method_off(sd_bus_message *msg, void *userdata,
     f87d_effmgr_stop(ctx->effmgr);
 
     f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
-    if (!dev)
+    if (!dev) {
+        autosave_last(ctx);
         return sd_bus_reply_method_errorf(msg,
             "org.f87.Error.NotConnected", "No keyboard connected");
+    }
 
     int rc = f87_lights_off(dev);
     if (rc < 0)
@@ -247,7 +249,7 @@ static int method_rescan(sd_bus_message *msg, void *userdata,
     f87d_dbus_ctx_t *ctx = userdata;
     f87d_idle_touch(ctx->idle);
 
-    int rc = f87d_devmgr_scan(ctx->devmgr, NULL);
+    int rc = f87d_devmgr_scan(ctx->devmgr, ctx->dev_cbs);
     return sd_bus_reply_method_return(msg, "b", rc == 0);
 }
 
@@ -525,7 +527,15 @@ static int method_delete_profile(sd_bus_message *msg, void *userdata,
     int rc = sd_bus_message_read(msg, "s", &name);
     if (rc < 0) return sd_bus_error_set_errno(error, -rc);
 
-    f87d_profile_delete(name);
+    if (f87d_profile_validate_name(name) < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.InvalidName", "Invalid profile name: %s", name);
+
+    rc = f87d_profile_delete(name);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotFound", "Profile not found: %s", name);
+
     F87_INFO(F87_SRC_DBUS, "Profile deleted: %s", name);
     return sd_bus_reply_method_return(msg, "b", 1);
 }
@@ -556,8 +566,13 @@ static int method_list_profiles(sd_bus_message *msg, void *userdata,
     if (r < 0) goto done;
 
     r = sd_bus_send(NULL, reply, NULL);
+    /* sd_bus_send takes ownership on success */
+    if (r >= 0)
+        reply = NULL;
 
 done:
+    if (reply)
+        sd_bus_message_unref(reply);
     f87d_profile_free_list(names, count);
     return r;
 }

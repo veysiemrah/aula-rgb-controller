@@ -14,6 +14,7 @@ typedef struct {
     f87d_effect_manager_t *effmgr;
     f87d_idle_monitor_t *idle;
     f87d_error_ring_t *error_ring;
+    const f87d_device_callbacks_t *dev_cbs;
 } f87d_dbus_ctx_t;
 
 int f87d_dbus_register(sd_bus *bus, f87d_dbus_ctx_t *ctx);
