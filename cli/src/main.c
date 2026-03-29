@@ -1127,37 +1127,37 @@ int main(int argc, char **argv)
         ret = cmd_info(ctx);
 
     } else if (strcmp(cmd, "brightness") == 0) {
-        ret = cmd_brightness(ctx, argc - 2, argv + 2);
+        ret = cmd_brightness(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "off") == 0) {
         ret = cmd_off(ctx);
 
     } else if (strcmp(cmd, "color") == 0 || strcmp(cmd, "colour") == 0) {
-        ret = cmd_color(ctx, argc - 2, argv + 2);
+        ret = cmd_color(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "effect") == 0) {
-        ret = cmd_effect(ctx, argc - 2, argv + 2);
+        ret = cmd_effect(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "key") == 0) {
-        ret = cmd_key(ctx, argc - 2, argv + 2);
+        ret = cmd_key(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "animate") == 0) {
-        ret = cmd_animate(ctx, argc - 2, argv + 2);
+        ret = cmd_animate(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "music") == 0) {
-        ret = cmd_music(ctx, argc - 2, argv + 2);
+        ret = cmd_music(ctx, argc - 2 - arg_offset, argv + 2 + arg_offset);
 
     } else if (strcmp(cmd, "raw") == 0) {
-        if (argc < 3) {
+        if (argc < 3 + arg_offset) {
             fprintf(stderr, "Usage: f87ctl raw send \"XX XX ...\"\n"
                             "       f87ctl raw listen\n");
             ret = 1;
-        } else if (strcmp(argv[2], "send") == 0) {
-            ret = cmd_raw_send(ctx, argc - 3, argv + 3);
-        } else if (strcmp(argv[2], "listen") == 0) {
+        } else if (strcmp(argv[2 + arg_offset], "send") == 0) {
+            ret = cmd_raw_send(ctx, argc - 3 - arg_offset, argv + 3 + arg_offset);
+        } else if (strcmp(argv[2 + arg_offset], "listen") == 0) {
             ret = cmd_raw_listen(ctx);
         } else {
-            fprintf(stderr, "Unknown raw subcommand '%s'.\n", argv[2]);
+            fprintf(stderr, "Unknown raw subcommand '%s'.\n", argv[2 + arg_offset]);
             ret = 1;
         }
 
