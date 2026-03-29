@@ -1,6 +1,7 @@
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(SYSTEMD REQUIRED libsystemd)
 
 # Audio support (optional)
 option(BUILD_AUDIO "Build with PulseAudio audio support" ON)
@@ -23,6 +24,7 @@ add_library(f87 SHARED
     src/effects_sw.c
     src/effects_sw_reactive.c
     src/sensor.c
+    src/client.c
 )
 
 target_include_directories(f87
@@ -31,12 +33,14 @@ target_include_directories(f87
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${LIBUSB_INCLUDE_DIRS}
+        ${SYSTEMD_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(f87
     PRIVATE
         ${LIBUSB_LIBRARIES}
+        ${SYSTEMD_LIBRARIES}
         Threads::Threads
         m
 )
