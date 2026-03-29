@@ -650,6 +650,9 @@ static void sensor_effect_destroy(f87_effect_ctx_t *ctx)
     if (sd->sensor_ctx.active_count > 0)
         f87_sensor_thread_stop(&sd->sensor_ctx);
 
+    for (int i = 0; i < sd->profile.mapping_count; i++)
+        free(sd->profile.mappings[i].sensor_name);
+
     free(sd);
     ctx->effect_data = NULL;
 }

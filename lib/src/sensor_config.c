@@ -38,7 +38,8 @@ static int parse_profile(struct json_object *root, f87_sensor_profile_t *profile
 
         struct json_object *jsensor;
         if (!json_object_object_get_ex(jmap, "sensor", &jsensor)) continue;
-        m->sensor_name = json_object_get_string(jsensor);
+        m->sensor_name = strdup(json_object_get_string(jsensor));
+        if (!m->sensor_name) continue;
 
         if (!f87_sensor_find(m->sensor_name)) {
             fprintf(stderr, "f87: unknown sensor '%s', skipping\n", m->sensor_name);

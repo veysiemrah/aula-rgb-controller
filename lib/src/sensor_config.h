@@ -13,7 +13,7 @@ typedef enum {
 } f87_sensor_mode_t;
 
 typedef struct {
-    const char *sensor_name;
+    char *sensor_name;          /* owned copy — must be freed */
     int sensor_index;               /* Index into active sensors array */
     f87_sensor_mode_t mode;
     int key_ids[F87_SENSOR_KEYS_MAX];
