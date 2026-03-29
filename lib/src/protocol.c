@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "f87/logger.h"
 #include <libusb-1.0/libusb.h>
 #include <string.h>
 #include <unistd.h>  /* usleep */
@@ -370,9 +371,12 @@ int f87_pkt_send(f87_device *dev, const f87_packet *pkt)
         F87_TIMEOUT_MS
     );
 
-    if (rc < 0)
+    if (rc < 0) {
+        F87_TRACE(F87_SRC_USB, "Send failed: %d", rc);
         return -1;
+    }
 
+    F87_TRACE(F87_SRC_USB, "Send: %d bytes, cmd=0x%02X", rc, pkt->data[1]);
     return rc;
 }
 
@@ -403,9 +407,12 @@ int f87_pkt_recv(f87_device *dev, f87_packet *pkt, int timeout_ms)
         timeout_ms > 0 ? timeout_ms : F87_TIMEOUT_MS
     );
 
-    if (rc < 0)
+    if (rc < 0) {
+        F87_TRACE(F87_SRC_USB, "Recv failed: %d", rc);
         return -1;
+    }
 
+    F87_TRACE(F87_SRC_USB, "Recv: %d bytes", rc);
     return rc;
 }
 

@@ -2,6 +2,7 @@
 
 #include "animate_internal.h"
 #include "spectrum.h"
+#include "f87/logger.h"
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <string.h>
@@ -56,7 +57,7 @@ static void *audio_thread_func(void *arg)
         if (!source || monitor_name[0] == '\0')
             source = "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor";
 
-        fprintf(stderr, "f87: audio source: %s\n", source);
+        F87_DEBUG(F87_SRC_AUDIO, "Audio source: %s", source);
     }
 
     /* Low-latency buffer attributes */
@@ -81,7 +82,7 @@ static void *audio_thread_func(void *arg)
     );
 
     if (!pa) {
-        fprintf(stderr, "f87: PulseAudio error: %s\n", pa_strerror(pa_err));
+        F87_ERROR(F87_SRC_AUDIO, "PulseAudio error: %s", pa_strerror(pa_err));
         atomic_store(&ctx->error, F87_ERR_AUDIO);
         return NULL;
     }
@@ -90,7 +91,7 @@ static void *audio_thread_func(void *arg)
 
     while (atomic_load(&ctx->running)) {
         if (pa_simple_read(pa, samples, sizeof(samples), &pa_err) < 0) {
-            fprintf(stderr, "f87: PulseAudio read error: %s\n", pa_strerror(pa_err));
+            F87_ERROR(F87_SRC_AUDIO, "PulseAudio read error: %s", pa_strerror(pa_err));
             break;
         }
 
