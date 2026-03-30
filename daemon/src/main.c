@@ -7,6 +7,7 @@
 
 #include <systemd/sd-bus.h>
 #include <signal.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +77,10 @@ int main(int argc, char **argv)
     f87d_idle_init(&g_idle);
 
     f87d_devmgr_scan(&g_devmgr, &g_dev_cbs);
+
+    /* Let keyboard settle after USB open/model query before sending commands */
+    if (g_devmgr.connected)
+        usleep(200000);  /* 200ms */
 
     /* Restore last state */
     f87d_profile_t last_profile;
