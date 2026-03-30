@@ -119,25 +119,10 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
     gtk_box_append(box, make_expander_category(_("Music"), "music", mu, sd));
 
     static const EffectEntry se[] = {
-        {"developer", 106, N_("Developer sensor profile")},
-        {"gamer",     107, N_("Gamer sensor profile")},
-        {"system",    108, N_("System monitor profile")},
+        {N_("Sensor Monitor"), 106, N_("Monitor system sensors on keyboard")},
         {NULL, 0, NULL}
     };
-    GtkListBox *se_list = GTK_LIST_BOX(gtk_list_box_new());
-    gtk_widget_add_css_class(GTK_WIDGET(se_list), "sidebar");
-    g_signal_connect(se_list, "row-activated", G_CALLBACK(on_row_activated), sd);
-    for (int i = 0; se[i].name; i++) {
-        GtkListBoxRow *row = make_effect_row("sensor", se[i].name, se[i].id, se[i].tooltip);
-        g_object_set_data(G_OBJECT(row), "sensor-profile", (gpointer)se[i].name);
-        gtk_list_box_append(se_list, GTK_WIDGET(row));
-    }
-
-    GtkExpander *se_expander = GTK_EXPANDER(gtk_expander_new(_("Sensor")));
-    gtk_expander_set_expanded(se_expander, FALSE);
-    gtk_expander_set_child(se_expander, GTK_WIDGET(se_list));
-    gtk_widget_add_css_class(GTK_WIDGET(se_expander), "category-expander");
-    gtk_box_append(box, GTK_WIDGET(se_expander));
+    gtk_box_append(box, make_expander_category(_("Sensor"), "sensor", se, sd));
 
     return GTK_WIDGET(box);
 }

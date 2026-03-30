@@ -11,6 +11,7 @@ typedef enum {
     F87_PARAM_AUDIO      = (1 << 4),
     F87_PARAM_PROFILE    = (1 << 5),
     F87_PARAM_PAINT      = (1 << 6),
+    F87_PARAM_SENSOR     = (1 << 7),
 } f87_param_flags;
 
 typedef struct {
