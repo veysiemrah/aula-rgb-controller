@@ -23,4 +23,20 @@ void f87_keyboard_view_set_paint_mode(F87KeyboardView *view, gboolean enabled,
 /* Get per-key color array (88x3 RGB) — for sending to daemon */
 const uint8_t (*f87_keyboard_view_get_colors(F87KeyboardView *view))[3];
 
+/* Sensor overlay — shows colored borders and labels on assigned keys */
+typedef struct {
+    int key_id;
+    uint8_t color[3];
+    char label[16];
+} f87_key_overlay_t;
+
+void f87_keyboard_view_set_overlays(F87KeyboardView *view,
+                                     const f87_key_overlay_t *overlays, int count);
+void f87_keyboard_view_clear_overlays(F87KeyboardView *view);
+
+/* Sensor placement mode — single-click callback (no drag) */
+typedef void (*F87KeyClickCallback)(int key_id, gpointer user_data);
+void f87_keyboard_view_set_click_mode(F87KeyboardView *view, gboolean enabled,
+                                       F87KeyClickCallback cb, gpointer user_data);
+
 #endif /* F87_KEYBOARD_VIEW_H */
