@@ -1,4 +1,4 @@
-# Aula F87 Pro -- Protocol Notes
+# AULA F87 TK — USB HID Protocol Notes
 
 ## USB Identifiers (Confirmed)
 

@@ -1,24 +1,39 @@
 #!/bin/bash
-# F87Control — Linux setup script
+# AULA RGB Controller — Linux setup script
 # Run: chmod +x setup.sh && ./setup.sh
 
 set -e
 
-echo "=== F87Control Setup ==="
+echo "=== AULA RGB Controller Setup ==="
 
 # Detect package manager and install dependencies
 if command -v apt &>/dev/null; then
     echo "[1/4] Installing dependencies (apt)..."
     sudo apt update
-    sudo apt install -y libusb-1.0-0-dev libjson-c-dev cmake build-essential
+    sudo apt install -y libusb-1.0-0-dev libjson-c-dev libpulse-dev libsystemd-dev cmake build-essential
+    read -p "Install GTK4 GUI? [y/N] " gui
+    if [[ "$gui" =~ ^[Yy]$ ]]; then
+        sudo apt install -y libgtk-4-dev libadwaita-1-dev
+        GUI_FLAG="-DBUILD_GUI=ON"
+    fi
 elif command -v dnf &>/dev/null; then
     echo "[1/4] Installing dependencies (dnf)..."
-    sudo dnf install -y libusb1-devel json-c-devel cmake gcc make
+    sudo dnf install -y libusb1-devel json-c-devel pulseaudio-libs-devel systemd-devel cmake gcc make
+    read -p "Install GTK4 GUI? [y/N] " gui
+    if [[ "$gui" =~ ^[Yy]$ ]]; then
+        sudo dnf install -y gtk4-devel libadwaita-devel
+        GUI_FLAG="-DBUILD_GUI=ON"
+    fi
 elif command -v pacman &>/dev/null; then
     echo "[1/4] Installing dependencies (pacman)..."
-    sudo pacman -S --noconfirm libusb json-c cmake base-devel
+    sudo pacman -S --noconfirm libusb json-c libpulse systemd cmake base-devel
+    read -p "Install GTK4 GUI? [y/N] " gui
+    if [[ "$gui" =~ ^[Yy]$ ]]; then
+        sudo pacman -S --noconfirm gtk4 libadwaita
+        GUI_FLAG="-DBUILD_GUI=ON"
+    fi
 else
-    echo "[1/4] Unknown package manager. Install manually: libusb-1.0-dev, json-c-dev, cmake, build-essential"
+    echo "[1/4] Unknown package manager. See README.md for manual dependency list."
     exit 1
 fi
 
@@ -33,7 +48,7 @@ echo "  udev rules installed. Replug keyboard if already connected."
 echo "[3/4] Building..."
 mkdir -p build
 cd build
-cmake .. -DBUILD_GUI=OFF -DCMAKE_BUILD_TYPE=Debug
+cmake .. -DCMAKE_BUILD_TYPE=Release ${GUI_FLAG:-}
 make -j$(nproc)
 
 # Test
@@ -43,10 +58,12 @@ ctest --output-on-failure
 echo ""
 echo "=== Setup complete ==="
 echo ""
-echo "Try these commands:"
-echo "  ./build/f87ctl list          # Find keyboard"
-echo "  ./build/f87ctl info          # Device info"
-echo "  ./build/f87ctl key set-all ff0000  # All keys red"
-echo "  ./build/f87ctl key set-all 00ff00  # All keys green"
-echo "  ./build/f87ctl key set ESC ff0000  # ESC red"
-echo "  ./build/f87ctl raw send \"06 82 01 00 01 00 06\"  # Model query"
+echo "Install system-wide (optional):"
+echo "  cd build && sudo make install"
+echo ""
+echo "Or run directly:"
+echo "  ./build/cli/f87ctl info"
+echo "  ./build/daemon/f87d &"
+if [ -n "$GUI_FLAG" ]; then
+echo "  ./build/gui/f87control"
+fi
