@@ -454,6 +454,45 @@ static void render_spectrum_hw(f87_preview_t *p)
     }
 }
 
+static void render_ripple_hw(f87_preview_t *p)
+{
+    /* HW Ripple: smooth circular spread from pressed key, no oscillation */
+    reactive_state_t *s = p->state;
+
+    float expand = 0.3f + (float)p->speed * 0.15f;
+    for (int w = 0; w < REACTIVE_MAX; w++) {
+        if (s->items[w].strength <= 0) continue;
+        s->items[w].radius += expand;
+        s->items[w].strength *= 0.92f;
+        if (s->items[w].strength < 0.01f) s->items[w].strength = 0;
+    }
+
+    memset(p->buf, 0, sizeof(p->buf));
+    for (int k = 0; k < KEY_COUNT; k++) {
+        float total = 0;
+        for (int w = 0; w < REACTIVE_MAX; w++) {
+            if (s->items[w].strength <= 0) continue;
+            int src = s->items[w].key_id;
+            float dx = (float)(f87_key_layout[k].col - f87_key_layout[src].col);
+            float dy = (float)(f87_key_layout[k].row - f87_key_layout[src].row) * 2.0f;
+            float dist = sqrtf(dx * dx + dy * dy);
+            if (dist < s->items[w].radius) {
+                float v = (1.0f - dist / s->items[w].radius) * s->items[w].strength;
+                if (v > total) total = v;
+            }
+        }
+        if (total > 1.0f) total = 1.0f;
+        if (p->colorful && total > 0) {
+            float hue = fmodf((float)p->frame * 2.0f + f87_key_layout[k].col * 20.0f, 360.0f);
+            hsv(hue, 1.0f, total, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
+        } else {
+            p->buf[k][0] = (uint8_t)(p->color[0] * total);
+            p->buf[k][1] = (uint8_t)(p->color[1] * total);
+            p->buf[k][2] = (uint8_t)(p->color[2] * total);
+        }
+    }
+}
+
 static void render_explode(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
@@ -675,7 +714,7 @@ static void render_frame(f87_preview_t *p)
     case 3:  render_wave(p); break;
     case 4:  render_spectrum_hw(p); break;
     case 5:  render_rain(p); break;
-    case 7:  render_ripple_sw(p); break;  /* HW ripple ~ SW ripple visually */
+    case 7:  render_ripple_hw(p); break;
     case 8:  render_starlight(p); break;
     case 10: render_snake(p); break;
     case 11: render_plasma(p); break;
