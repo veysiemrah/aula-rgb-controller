@@ -628,7 +628,13 @@ static void render_explode(f87_preview_t *p)
             }
         }
         if (max_v > 0) {
-            hsv(best_hue, 1.0f, max_v, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
+            if (p->colorful) {
+                hsv(best_hue, 1.0f, max_v, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
+            } else {
+                p->buf[k][0] = (uint8_t)(p->color[0] * max_v);
+                p->buf[k][1] = (uint8_t)(p->color[1] * max_v);
+                p->buf[k][2] = (uint8_t)(p->color[2] * max_v);
+            }
         }
     }
 }

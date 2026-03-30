@@ -762,6 +762,9 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
                                ctrl->selected_color[0],
                                ctrl->selected_color[1],
                                ctrl->selected_color[2]);
+            int cf = ctrl->colorful_switch ?
+                     gtk_switch_get_active(ctrl->colorful_switch) : 0;
+            f87_preview_set_colorful(ctrl->preview, cf);
         }
     }
 }
