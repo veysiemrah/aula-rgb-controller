@@ -99,7 +99,7 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
         {"Plasma",     102, N_("Colorful plasma waves")},
         {"Radar",      104, N_("Rotating radar sweep")},
         {"Lightning",  105, N_("Random lightning bolts")},
-        {"Explode",    110, N_("Colorful explosions on key press")},
+        {"Explode",    110, N_("Explosions on key press, speed controls blast radius")},
         {"Ripple SW",  111, N_("Software ripple waves on key press")},
         {"Typewriter", 112, N_("Heat trail on key press")},
         {"Life",       113, N_("Conway's Game of Life on key press")},

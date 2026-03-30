@@ -36,7 +36,7 @@ static const effect_meta_t meta_table[] = {
     {103, B,              NULL,      N_("CPU temperature heatmap") },
     {104, B | S | C,      NULL,      N_("Rotating radar sweep") },
     {105, B | S | C,      NULL,      N_("Random lightning bolts") },
-    {110, B|S|C|CF,       NULL,      N_("Colorful explosions on key press") },
+    {110, B|S|C|CF,       NULL,      N_("Explosions on key press, speed controls blast radius") },
     {111, B | S | C,      NULL,      N_("Software ripple waves on key press") },
     {112, B | S,          NULL,      N_("Heat trail on key press") },
     {113, B | S | C,      NULL,      N_("Conway's Game of Life on key press") },
