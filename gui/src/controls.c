@@ -717,6 +717,8 @@ static void build_controls_for_effect(F87Controls *ctrl)
 
     /* Enable paint mode */
     if ((flags & F87_PARAM_PAINT) && ctrl->keyboard) {
+        if (ctrl->preview)
+            f87_preview_stop(ctrl->preview);
         f87_keyboard_view_clear(ctrl->keyboard);
         f87_keyboard_view_set_paint_mode(ctrl->keyboard, TRUE, on_key_painted, ctrl);
     }
