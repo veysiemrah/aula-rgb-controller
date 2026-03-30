@@ -67,6 +67,10 @@ static void update_status(F87Controls *ctrl, const char *text)
         ctrl->status_cb(text, ctrl->user_data);
 }
 
+/* Forward declarations for live update */
+static gboolean is_direct_mode_effect(F87Controls *ctrl);
+static int send_sw_effect(F87Controls *ctrl);
+
 /* ===== HSV <-> RGB ===== */
 
 static void hsv_to_rgb(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b)
@@ -140,6 +144,10 @@ static void sync_color_from_hsv(F87Controls *ctrl)
                                ctrl->selected_color[0],
                                ctrl->selected_color[1],
                                ctrl->selected_color[2]);
+
+    /* Live update running SW effect on keyboard */
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
 }
 
 /* ===== SV GRADIENT AREA ===== */
@@ -288,11 +296,23 @@ static GtkWidget *create_slider(const char *label_text, double min, double max,
     return GTK_WIDGET(box);
 }
 
+static void on_brightness_changed(GtkRange *range, gpointer data)
+{
+    (void)range;
+    F87Controls *ctrl = data;
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
+}
+
 static void on_speed_changed(GtkRange *range, gpointer data)
 {
     F87Controls *ctrl = data;
     if (ctrl->preview)
         f87_preview_set_speed(ctrl->preview, (uint8_t)gtk_range_get_value(range));
+
+    /* Live update running SW effect */
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
 }
 
 static void on_colorful_changed(GtkSwitch *sw, GParamSpec *pspec, gpointer data)
@@ -301,6 +321,9 @@ static void on_colorful_changed(GtkSwitch *sw, GParamSpec *pspec, gpointer data)
     F87Controls *ctrl = data;
     if (ctrl->preview)
         f87_preview_set_colorful(ctrl->preview, gtk_switch_get_active(sw));
+
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
 }
 
 /* ===== PAINT CALLBACKS ===== */
@@ -671,8 +694,10 @@ static void build_controls_for_effect(F87Controls *ctrl)
     GtkBox *left = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 4));
     gtk_widget_set_hexpand(GTK_WIDGET(left), TRUE);
 
-    if (flags & F87_PARAM_BRIGHTNESS)
+    if (flags & F87_PARAM_BRIGHTNESS) {
         gtk_box_append(left, create_slider(_("Brightness"), 1, 4, 3, 1, &ctrl->brightness_scale));
+        g_signal_connect(ctrl->brightness_scale, "value-changed", G_CALLBACK(on_brightness_changed), ctrl);
+    }
 
     if (flags & F87_PARAM_SPEED) {
         gtk_box_append(left, create_slider(_("Speed"), 0, 4, 2, 1, &ctrl->speed_scale));
