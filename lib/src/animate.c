@@ -11,8 +11,9 @@
 #include <sys/ioctl.h>
 
 #define F87_ANIM_MAX_FPS_SW   25
+#define F87_ANIM_MAX_FPS_MU   30
 #define F87_ANIM_FRAME_US_25  40000  /* ~25fps = 40ms — safe USB limit for SW */
-#define F87_ANIM_FRAME_US_60  16666  /* ~60fps = 16.6ms — music effects */
+#define F87_ANIM_FRAME_US_30  33333  /* ~30fps = 33ms — music effects */
 
 uint64_t f87_time_us(void)
 {
@@ -190,7 +191,12 @@ static void *anim_thread_func(void *arg)
         usleep(F87_CMD_DELAY_US);
 
         if (rc < 0) {
-            /* USB transient errors: exponential backoff before giving up */
+            /* Re-enable direct mode — keyboard may have timed out */
+            usleep(50000);  /* 50ms settle */
+            f87_direct_mode_enable(ctx->dev);
+            usleep(F87_CMD_DELAY_US);
+
+            /* Retry with exponential backoff */
             int retries = 5;
             useconds_t backoff = 10000;  /* 10ms, 20ms, 40ms, 80ms, 160ms */
             while (rc < 0 && retries-- > 0) {
@@ -288,13 +294,13 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
         /* Non-fatal if input not available */
     }
 
-    /* Set frame rate: override from config, or auto (30fps SW, 60fps music) */
+    /* Set frame rate: override from config, or auto (25fps SW, 30fps music) */
     if (ctx->config.fps > 0) {
-        int max_fps = effect->needs_audio ? 60 : F87_ANIM_MAX_FPS_SW;
+        int max_fps = effect->needs_audio ? F87_ANIM_MAX_FPS_MU : F87_ANIM_MAX_FPS_SW;
         int fps = ctx->config.fps > max_fps ? max_fps : ctx->config.fps;
         ctx->frame_time_us = 1000000ULL / (uint64_t)fps;
     } else {
-        ctx->frame_time_us = effect->needs_audio ? F87_ANIM_FRAME_US_60 : F87_ANIM_FRAME_US_25;
+        ctx->frame_time_us = effect->needs_audio ? F87_ANIM_FRAME_US_30 : F87_ANIM_FRAME_US_25;
     }
 
     atomic_store(&ctx->running, true);
