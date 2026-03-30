@@ -25,6 +25,7 @@ add_executable(f87control
     src/controls.c
     src/keyboard_view.c
     src/preview.c
+    src/sensor_editor.c
     ${GRESOURCE_C}
 )
 

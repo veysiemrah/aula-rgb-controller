@@ -117,6 +117,15 @@ struct _F87KeyboardView {
     gpointer paint_data;
     gboolean paint_dragging;
     int last_painted_key;
+
+    /* Sensor overlays */
+    f87_key_overlay_t overlays[F87_KEY_COUNT];
+    int overlay_count;
+
+    /* Sensor click mode (separate from paint mode) */
+    gboolean click_mode;
+    F87KeyClickCallback click_cb;
+    gpointer click_data;
 };
 
 G_DEFINE_TYPE(F87KeyboardView, f87_keyboard_view, GTK_TYPE_DRAWING_AREA)
@@ -238,6 +247,36 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
                           ty + (th + ext.height) / 2);
             cairo_show_text(cr, label);
         }
+
+        /* Sensor overlay: colored border and value label */
+        for (int ov = 0; ov < self->overlay_count; ov++) {
+            if (self->overlays[ov].key_id != i) continue;
+
+            uint8_t or_ = self->overlays[ov].color[0];
+            uint8_t og  = self->overlays[ov].color[1];
+            uint8_t ob  = self->overlays[ov].color[2];
+
+            double bw = 2.0 * fmin(sx, sy);
+            draw_rounded_rect(cr, x + bw / 2, y + bw / 2, w - bw, h - bw, radius);
+            cairo_set_source_rgba(cr, or_ / 255.0, og / 255.0, ob / 255.0, 0.8);
+            cairo_set_line_width(cr, bw);
+            cairo_stroke(cr);
+
+            if (self->overlays[ov].label[0] && tw > 12) {
+                double lbl_size = th * 0.28;
+                if (lbl_size < 4) lbl_size = 4;
+                if (lbl_size > 9) lbl_size = 9;
+                cairo_set_font_size(cr, lbl_size);
+                cairo_set_source_rgba(cr, or_ / 255.0, og / 255.0, ob / 255.0, 0.9);
+
+                cairo_text_extents_t oext;
+                cairo_text_extents(cr, self->overlays[ov].label, &oext);
+                cairo_move_to(cr, tx + (tw - oext.width) / 2,
+                              ty + th - lbl_size * 0.3);
+                cairo_show_text(cr, self->overlays[ov].label);
+            }
+            break;
+        }
     }
 }
 
@@ -246,6 +285,17 @@ static void on_key_pressed(GtkGestureClick *gesture, int n_press, double x, doub
 {
     (void)gesture; (void)n_press;
     F87KeyboardView *self = user_data;
+
+    /* Sensor click mode — single click, no drag */
+    if (self->click_mode) {
+        int w = gtk_widget_get_width(GTK_WIDGET(self));
+        int h = gtk_widget_get_height(GTK_WIDGET(self));
+        int key_id = hit_test((int)x, (int)y, w, h);
+        if (key_id >= 0 && self->click_cb)
+            self->click_cb(key_id, self->click_data);
+        return;
+    }
+
     if (!self->paint_mode) return;
 
     self->paint_dragging = TRUE;
@@ -378,4 +428,32 @@ void f87_keyboard_view_set_paint_mode(F87KeyboardView *view, gboolean enabled,
 const uint8_t (*f87_keyboard_view_get_colors(F87KeyboardView *view))[3]
 {
     return (const uint8_t (*)[3])view->colors;
+}
+
+void f87_keyboard_view_set_overlays(F87KeyboardView *view,
+                                     const f87_key_overlay_t *overlays, int count)
+{
+    if (count > F87_KEY_COUNT) count = F87_KEY_COUNT;
+    memcpy(view->overlays, overlays, count * sizeof(f87_key_overlay_t));
+    view->overlay_count = count;
+    gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
+void f87_keyboard_view_clear_overlays(F87KeyboardView *view)
+{
+    view->overlay_count = 0;
+    gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
+void f87_keyboard_view_set_click_mode(F87KeyboardView *view, gboolean enabled,
+                                       F87KeyClickCallback cb, gpointer user_data)
+{
+    view->click_mode = enabled;
+    view->click_cb = cb;
+    view->click_data = user_data;
+
+    if (enabled)
+        gtk_widget_set_cursor_from_name(GTK_WIDGET(view), "crosshair");
+    else if (!view->paint_mode)
+        gtk_widget_set_cursor(GTK_WIDGET(view), NULL);
 }

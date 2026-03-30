@@ -47,6 +47,14 @@ if(JSON_C_FOUND)
     target_include_directories(test_profile PRIVATE daemon/src ${JSON_C_INCLUDE_DIRS})
     target_link_libraries(test_profile PRIVATE ${JSON_C_LIBRARIES})
     add_test(NAME profile_tests COMMAND test_profile)
+
+    add_executable(test_sensor_config tests/test_sensor_config.c
+                   lib/src/sensor_config.c lib/src/sensor.c lib/src/protocol.c lib/src/logger.c)
+    target_include_directories(test_sensor_config PRIVATE lib/include lib/src
+                               ${JSON_C_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
+    target_link_libraries(test_sensor_config PRIVATE ${JSON_C_LIBRARIES} ${LIBUSB_LIBRARIES})
+    target_compile_definitions(test_sensor_config PRIVATE F87_HAS_JSON=1)
+    add_test(NAME sensor_config_tests COMMAND test_sensor_config)
 endif()
 
 add_executable(test_logger tests/test_logger.c lib/src/logger.c)

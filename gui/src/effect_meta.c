@@ -7,8 +7,8 @@
 #define C  F87_PARAM_COLOR
 #define CF F87_PARAM_COLORFUL
 #define A  F87_PARAM_AUDIO
-#define P  F87_PARAM_PROFILE
 #define PT F87_PARAM_PAINT
+#define SN F87_PARAM_SENSOR
 
 static const effect_meta_t meta_table[] = {
     /* HW effects */
@@ -50,9 +50,7 @@ static const effect_meta_t meta_table[] = {
     {204, B | S | A,      NULL,      N_("Frequency band mapping") },
 
     /* Sensor */
-    {106, B | P,          NULL,      N_("Developer sensor profile") },
-    {107, B | P,          NULL,      N_("Gamer sensor profile") },
-    {108, B | P,          NULL,      N_("System monitor profile") },
+    {106, B | SN,         NULL,      N_("Monitor system sensors on keyboard") },
 };
 
 #undef B
@@ -60,8 +58,8 @@ static const effect_meta_t meta_table[] = {
 #undef C
 #undef CF
 #undef A
-#undef P
 #undef PT
+#undef SN
 
 static const effect_meta_t default_meta = { -1, F87_PARAM_BRIGHTNESS, NULL, NULL };
 

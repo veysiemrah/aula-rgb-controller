@@ -152,4 +152,52 @@ int f87_sensor_config_builtin(const char *name, f87_sensor_profile_t *profile,
     return rc;
 }
 
+static const char *find_key_name(int key_id, const f87_key_info *layout, int count)
+{
+    for (int i = 0; i < count; i++) {
+        if (layout[i].key_id == key_id)
+            return layout[i].name;
+    }
+    return NULL;
+}
+
+int f87_sensor_config_save(const char *path, const f87_sensor_profile_t *profile,
+                            const f87_key_info *layout, int key_count)
+{
+    struct json_object *root = json_object_new_object();
+    json_object_object_add(root, "profile",
+                           json_object_new_string(profile->profile_name));
+
+    struct json_object *jmappings = json_object_new_array();
+
+    for (int i = 0; i < profile->mapping_count; i++) {
+        const f87_sensor_mapping_t *m = &profile->mappings[i];
+        struct json_object *jmap = json_object_new_object();
+
+        json_object_object_add(jmap, "sensor",
+                               json_object_new_string(m->sensor_name));
+        json_object_object_add(jmap, "mode",
+                               json_object_new_string(
+                                   m->mode == F87_SENSOR_MODE_BAR ? "bar" : "color"));
+
+        struct json_object *jkeys = json_object_new_array();
+        for (int k = 0; k < m->key_count; k++) {
+            const char *name = find_key_name(m->key_ids[k], layout, key_count);
+            if (name)
+                json_object_array_add(jkeys, json_object_new_string(name));
+        }
+        json_object_object_add(jmap, "keys", jkeys);
+        json_object_object_add(jmap, "interval_ms",
+                               json_object_new_int(m->interval_ms));
+
+        json_object_array_add(jmappings, jmap);
+    }
+
+    json_object_object_add(root, "mappings", jmappings);
+
+    int rc = json_object_to_file_ext(path, root, JSON_C_TO_STRING_PRETTY);
+    json_object_put(root);
+    return rc;
+}
+
 #endif /* F87_HAS_JSON */

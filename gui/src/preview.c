@@ -1,5 +1,6 @@
 #include "preview.h"
 #include "protocol.h"
+#include "sensor_config.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,16 @@ struct f87_preview {
     uint32_t rng;
     uint8_t buf[KEY_COUNT][3];
     void *state; /* effect-specific state */
+
+    /* Sensor profile data for preview */
+    struct {
+        int start_key;
+        int key_count;
+        int mode;       /* 0=color, 1=bar */
+        float phase;
+        uint8_t color[3];
+    } sensor_groups[16];
+    int sensor_group_count;
 };
 
 static uint32_t rng_next(uint32_t *s)
@@ -579,43 +590,70 @@ static void render_ripple_hw(f87_preview_t *p)
 
 static void render_sensor(f87_preview_t *p)
 {
-    /* Simulate sensor bar display — 4 sensors on F-key groups,
-     * levels slowly oscillate to show the bar/color effect */
     memset(p->buf, 0, sizeof(p->buf));
     float t = (float)p->frame * 0.03f;
 
-    /* 4 sensor groups mapped to F-key rows:
-     * F1-F3: CPU temp, F4-F6: CPU load, F7-F9: RAM, F10-F12: GPU */
-    struct { int start; int count; float phase; } groups[] = {
-        {1,  3, 0.0f},   /* F1-F3 */
-        {4,  3, 1.5f},   /* F4-F6 */
-        {7,  3, 3.0f},   /* F7-F9 */
-        {10, 3, 4.5f},   /* F10-F12 */
-    };
+    if (p->sensor_group_count == 0) {
+        /* Fallback: generic 4 groups on F1-F12 */
+        struct { int start; int count; float phase; } groups[] = {
+            {1, 3, 0.0f}, {4, 3, 1.5f}, {7, 3, 3.0f}, {10, 3, 4.5f}
+        };
+        for (int g = 0; g < 4; g++) {
+            float val = 0.55f + 0.35f * sinf(t + groups[g].phase);
+            int lit = (int)(val * groups[g].count + 0.5f);
+            if (lit > groups[g].count) lit = groups[g].count;
+            for (int i = 0; i < groups[g].count; i++) {
+                int key = groups[g].start + i;
+                if (key >= KEY_COUNT) break;
+                if (i < lit) {
+                    float ratio = (float)i / fmaxf(groups[g].count - 1, 1);
+                    p->buf[key][0] = (uint8_t)(ratio * 255);
+                    p->buf[key][1] = (uint8_t)((1.0f - ratio) * 255);
+                    p->buf[key][2] = 0;
+                }
+            }
+        }
+        p->buf[0][0] = 0; p->buf[0][1] = 100; p->buf[0][2] = 255;
+        return;
+    }
 
-    for (int g = 0; g < 4; g++) {
-        /* Simulated sensor value: 0.2-0.9 oscillating */
-        float val = 0.55f + 0.35f * sinf(t + groups[g].phase);
-        int lit = (int)(val * groups[g].count + 0.5f);
-        if (lit > groups[g].count) lit = groups[g].count;
+    /* Profile-aware rendering */
+    for (int g = 0; g < p->sensor_group_count; g++) {
+        float val = 0.55f + 0.35f * sinf(t + p->sensor_groups[g].phase);
+        int start = p->sensor_groups[g].start_key;
+        int count = p->sensor_groups[g].key_count;
+        const uint8_t *col = p->sensor_groups[g].color;
 
-        for (int i = 0; i < groups[g].count; i++) {
-            int key = groups[g].start + i;
-            if (key >= KEY_COUNT) break;
-            if (i < lit) {
-                /* Green → yellow → red based on level */
-                float ratio = (float)i / (float)(groups[g].count - 1);
-                uint8_t r = (uint8_t)(ratio * 255);
-                uint8_t gr = (uint8_t)((1.0f - ratio) * 255);
-                p->buf[key][0] = r;
-                p->buf[key][1] = gr;
-                p->buf[key][2] = 0;
+        if (p->sensor_groups[g].mode == 0) {
+            /* COLOR mode: brightness varies */
+            for (int k = 0; k < count; k++) {
+                int kid = start + k;
+                if (kid >= KEY_COUNT) break;
+                p->buf[kid][0] = (uint8_t)(col[0] * val);
+                p->buf[kid][1] = (uint8_t)(col[1] * val);
+                p->buf[kid][2] = (uint8_t)(col[2] * val);
+            }
+        } else {
+            /* BAR mode: fill left to right */
+            int lit = (int)(val * count + 0.5f);
+            if (lit > count) lit = count;
+            for (int k = 0; k < count; k++) {
+                int kid = start + k;
+                if (kid >= KEY_COUNT) break;
+                if (k < lit) {
+                    float ratio = (float)k / fmaxf(count - 1, 1);
+                    float blend = 0.5f;
+                    p->buf[kid][0] = (uint8_t)(ratio * 255 * blend + col[0] * (1 - blend));
+                    p->buf[kid][1] = (uint8_t)((1.0f - ratio) * 255 * blend + col[1] * (1 - blend));
+                    p->buf[kid][2] = (uint8_t)(col[2] * (1 - blend));
+                } else {
+                    p->buf[kid][0] = col[0] / 8;
+                    p->buf[kid][1] = col[1] / 8;
+                    p->buf[kid][2] = col[2] / 8;
+                }
             }
         }
     }
-
-    /* Also light ESC as indicator */
-    p->buf[0][0] = 0; p->buf[0][1] = 100; p->buf[0][2] = 255;
 }
 
 static void render_aurora(f87_preview_t *p)
@@ -902,7 +940,7 @@ static void render_frame(f87_preview_t *p)
     case 202: render_breathing(p); break;
     case 203: render_spectrum_music(p); break;
     case 204: render_wave(p); break;
-    case 106: case 107: case 108:
+    case 106:
         render_sensor(p); break;
     default:  render_breathing(p); break;
     }
@@ -1036,4 +1074,42 @@ int f87_preview_is_reactive(int effect_id)
     return effect_id == 4 || effect_id == 7 || effect_id == 12 ||
            effect_id == 110 || effect_id == 111 || effect_id == 112 ||
            effect_id == 113 || effect_id == 114;
+}
+
+void f87_preview_set_sensor_profile(f87_preview_t *prev, const char *profile_name)
+{
+    prev->sensor_group_count = 0;
+    if (!profile_name) return;
+
+    f87_sensor_profile_t profile = {0};
+    int rc = f87_sensor_config_builtin(profile_name, &profile,
+                                        f87_key_layout, F87_KEY_COUNT);
+    if (rc < 0) return;
+
+    static const struct { const char *name; uint8_t c[3]; } palette[] = {
+        {"cpu_temp",  { 78, 205, 196}},
+        {"cpu_load",  {255, 107, 107}},
+        {"gpu_temp",  {168,  85, 247}},
+        {"ram_usage", {255, 230, 109}},
+    };
+
+    for (int i = 0; i < profile.mapping_count && i < 16; i++) {
+        f87_sensor_mapping_t *m = &profile.mappings[i];
+        int g = prev->sensor_group_count;
+        prev->sensor_groups[g].start_key = m->key_ids[0];
+        prev->sensor_groups[g].key_count = m->key_count;
+        prev->sensor_groups[g].mode = m->mode;
+        prev->sensor_groups[g].phase = (float)i * 1.5f;
+
+        /* Match color by sensor name */
+        memcpy(prev->sensor_groups[g].color, palette[0].c, 3);
+        for (int s = 0; s < 4; s++) {
+            if (strcmp(m->sensor_name, palette[s].name) == 0) {
+                memcpy(prev->sensor_groups[g].color, palette[s].c, 3);
+                break;
+            }
+        }
+        prev->sensor_group_count++;
+        free(m->sensor_name);
+    }
 }
