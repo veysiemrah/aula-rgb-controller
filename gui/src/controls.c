@@ -757,11 +757,6 @@ static void build_controls_for_effect(F87Controls *ctrl)
                        f87_sensor_editor_get_widget(ctrl->sensor_editor));
         f87_sensor_editor_activate(ctrl->sensor_editor);
 
-        ctrl->send_button = GTK_BUTTON(gtk_button_new_with_label(_("Start")));
-        gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
-        g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
-        gtk_box_append(ctrl->params_box, GTK_WIDGET(ctrl->send_button));
-
         /* No preview animation — sensor_editor sets key colors directly */
         if (ctrl->preview)
             f87_preview_stop(ctrl->preview);
