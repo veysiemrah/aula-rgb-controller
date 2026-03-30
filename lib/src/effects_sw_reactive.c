@@ -51,7 +51,7 @@ static void explode_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
     (void)audio;
     explode_data_t *ed = ctx->effect_data;
     float br_scale = (float)ctx->brightness / 4.0f;
-    float expand = 0.3f;
+    float expand = 0.9f;
     /* speed controls max spread radius: 0=2 keys, 1=3, 2=5, 3=7, 4=10 */
     float max_radius = 2.0f + (float)ctx->speed * 2.0f;
 
