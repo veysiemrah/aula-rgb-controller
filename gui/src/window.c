@@ -41,19 +41,20 @@ static void save_window_state(F87Window *self)
 
 static void load_window_state(F87Window *self)
 {
+    int w = 1000, h = 550, maximized = 0;
+
     char *path = get_state_path();
     FILE *f = fopen(path, "r");
     g_free(path);
-    if (!f) return;
-
-    int w = 0, h = 0, maximized = 0;
-    char line[64];
-    while (fgets(line, sizeof(line), f)) {
-        sscanf(line, "width=%d", &w);
-        sscanf(line, "height=%d", &h);
-        sscanf(line, "maximized=%d", &maximized);
+    if (f) {
+        char line[64];
+        while (fgets(line, sizeof(line), f)) {
+            sscanf(line, "width=%d", &w);
+            sscanf(line, "height=%d", &h);
+            sscanf(line, "maximized=%d", &maximized);
+        }
+        fclose(f);
     }
-    fclose(f);
 
     if (w > 200 && h > 200)
         gtk_window_set_default_size(GTK_WINDOW(self), w, h);
@@ -350,7 +351,5 @@ F87Window *f87_window_new(AdwApplication *app)
     return g_object_new(F87_TYPE_WINDOW,
                         "application", app,
                         "title", "F87Control",
-                        "default-width", 1000,
-                        "default-height", 550,
                         NULL);
 }
