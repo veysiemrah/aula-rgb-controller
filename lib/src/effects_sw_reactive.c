@@ -90,21 +90,29 @@ static void explode_render(f87_effect_ctx_t *ctx, f87_frame_t *frame,
         }
 
         if (max_v > 0) {
-            float h = best_hue * 6.0f;
-            int hi = (int)h % 6;
-            float f = h - (float)(int)h;
-            float r = 0, g = 0, b = 0;
-            switch (hi) {
-                case 0: r = 1; g = f; b = 0; break;
-                case 1: r = 1 - f; g = 1; b = 0; break;
-                case 2: r = 0; g = 1; b = f; break;
-                case 3: r = 0; g = 1 - f; b = 1; break;
-                case 4: r = f; g = 0; b = 1; break;
-                default: r = 1; g = 0; b = 1 - f; break;
+            if (ctx->base_color[0] || ctx->base_color[1] || ctx->base_color[2]) {
+                /* Single color mode — use base_color */
+                frame->keys[k][0] = (uint8_t)((float)ctx->base_color[0] * max_v * br_scale);
+                frame->keys[k][1] = (uint8_t)((float)ctx->base_color[1] * max_v * br_scale);
+                frame->keys[k][2] = (uint8_t)((float)ctx->base_color[2] * max_v * br_scale);
+            } else {
+                /* Colorful mode — random hue per explosion */
+                float h = best_hue * 6.0f;
+                int hi = (int)h % 6;
+                float f = h - (float)(int)h;
+                float r = 0, g = 0, b = 0;
+                switch (hi) {
+                    case 0: r = 1; g = f; b = 0; break;
+                    case 1: r = 1 - f; g = 1; b = 0; break;
+                    case 2: r = 0; g = 1; b = f; break;
+                    case 3: r = 0; g = 1 - f; b = 1; break;
+                    case 4: r = f; g = 0; b = 1; break;
+                    default: r = 1; g = 0; b = 1 - f; break;
+                }
+                frame->keys[k][0] = (uint8_t)(r * max_v * 255.0f * br_scale);
+                frame->keys[k][1] = (uint8_t)(g * max_v * 255.0f * br_scale);
+                frame->keys[k][2] = (uint8_t)(b * max_v * 255.0f * br_scale);
             }
-            frame->keys[k][0] = (uint8_t)(r * max_v * 255.0f * br_scale);
-            frame->keys[k][1] = (uint8_t)(g * max_v * 255.0f * br_scale);
-            frame->keys[k][2] = (uint8_t)(b * max_v * 255.0f * br_scale);
         }
     }
 }

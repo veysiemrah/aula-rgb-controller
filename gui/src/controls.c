@@ -488,9 +488,14 @@ static void do_send(F87Controls *ctrl)
                                      ctrl->selected_color[2]);
     } else {
         f87_anim_config_t config = {0};
-        config.color[0] = ctrl->selected_color[0];
-        config.color[1] = ctrl->selected_color[1];
-        config.color[2] = ctrl->selected_color[2];
+        gboolean colorful_on = ctrl->colorful_switch &&
+                               gtk_switch_get_active(ctrl->colorful_switch);
+        if (!colorful_on) {
+            config.color[0] = ctrl->selected_color[0];
+            config.color[1] = ctrl->selected_color[1];
+            config.color[2] = ctrl->selected_color[2];
+        }
+        /* colorful_on: color stays (0,0,0) — daemon uses random hues */
         config.brightness = brightness;
         config.speed = speed;
 
