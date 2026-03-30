@@ -673,24 +673,23 @@ static void render_typewriter(f87_preview_t *p)
     }
 }
 
+typedef struct {
+    float heat[KEY_COUNT];
+    uint8_t key_color[KEY_COUNT][3]; /* color assigned at press time */
+} reactive_hw_state_t;
+
 static void render_reactive_hw(f87_preview_t *p)
 {
-    /* HW Reactive: pressed key glows with selected color then fades */
-    typewriter_state_t *s = p->state;
+    /* HW Reactive: pressed key glows then fades, colorful = new color each press */
+    reactive_hw_state_t *s = p->state;
     float decay = 0.92f - (float)p->speed * 0.02f;
     for (int k = 0; k < KEY_COUNT; k++) {
         s->heat[k] *= decay;
         float h = s->heat[k];
         if (h < 0.01f) { memset(p->buf[k], 0, 3); continue; }
-        if (p->colorful) {
-            uint32_t seed = (uint32_t)(k * 31337);
-            float hue = (float)(rng_next(&seed) % 360);
-            hsv(hue, 1.0f, h, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
-        } else {
-            p->buf[k][0] = (uint8_t)(p->color[0] * h);
-            p->buf[k][1] = (uint8_t)(p->color[1] * h);
-            p->buf[k][2] = (uint8_t)(p->color[2] * h);
-        }
+        p->buf[k][0] = (uint8_t)(s->key_color[k][0] * h);
+        p->buf[k][1] = (uint8_t)(s->key_color[k][1] * h);
+        p->buf[k][2] = (uint8_t)(s->key_color[k][2] * h);
     }
 }
 
@@ -812,7 +811,8 @@ static void alloc_state(f87_preview_t *p)
     case 104: p->state = g_new0(radar_state_t, 1); break;
     case 105: p->state = g_new0(lightning_state_t, 1); break;
     case 4: case 7: case 110: case 111: p->state = g_new0(reactive_state_t, 1); break;
-    case 12: case 112: p->state = g_new0(typewriter_state_t, 1); break;
+    case 12: p->state = g_new0(reactive_hw_state_t, 1); break;
+    case 112: p->state = g_new0(typewriter_state_t, 1); break;
     case 113: p->state = g_new0(life_state_t, 1); break;
     case 114: { keyheat_state_t *s = g_new0(keyheat_state_t, 1); s->max_heat = 1; p->state = s; break; }
     default: break;
@@ -931,7 +931,20 @@ void f87_preview_on_key(f87_preview_t *prev, int key_id)
     case 111: /* Ripple SW */
         inject_reactive_key(prev, key_id);
         break;
-    case 12:  /* Reactive HW — single key glow */
+    case 12: { /* Reactive HW — single key glow */
+        reactive_hw_state_t *s = prev->state;
+        if (s) {
+            s->heat[key_id] = 1.0f;
+            if (prev->colorful) {
+                float hue = (float)(rng_next(&prev->rng) % 360);
+                hsv(hue, 1.0f, 1.0f, &s->key_color[key_id][0],
+                    &s->key_color[key_id][1], &s->key_color[key_id][2]);
+            } else {
+                memcpy(s->key_color[key_id], prev->color, 3);
+            }
+        }
+        break;
+    }
     case 112: { /* Typewriter */
         typewriter_state_t *s = prev->state;
         if (s) s->heat[key_id] = 1.0f;
