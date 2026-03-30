@@ -147,7 +147,12 @@ static void render_starlight(f87_preview_t *p)
     int n = 2 + p->speed;
     for (int t = 0; t < n; t++) {
         int idx = (int)(rng_next(&p->rng) % KEY_COUNT);
-        memcpy(p->buf[idx], p->color, 3);
+        if (p->colorful) {
+            float hue = (float)(rng_next(&p->rng) % 360);
+            hsv(hue, 1.0f, 1.0f, &p->buf[idx][0], &p->buf[idx][1], &p->buf[idx][2]);
+        } else {
+            memcpy(p->buf[idx], p->color, 3);
+        }
     }
 }
 
