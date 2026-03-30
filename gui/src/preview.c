@@ -256,27 +256,26 @@ static void render_snake(f87_preview_t *p)
 
 static void render_marquee(f87_preview_t *p)
 {
-    /* Marquee: band of lit keys scrolling right across keyboard */
-    float t = (float)p->frame * speed_mult(p->speed) * 0.4f;
-    float band_width = 5.0f;
-    float total_width = 17.0f + band_width;
-    float band_pos = fmodf(t, total_width);
+    /* Marquee: sine wave expanding from center outward */
+    float t = (float)p->frame * speed_mult(p->speed) * 0.15f;
+    float cx = 8.5f;
 
-    memset(p->buf, 0, sizeof(p->buf));
     for (int i = 0; i < KEY_COUNT; i++) {
         float col = (float)f87_key_layout[i].col;
-        float dist = col - band_pos;
-        if (dist < 0) dist = -dist;
-        if (dist < band_width) {
-            float v = 1.0f - dist / band_width;
-            if (p->colorful) {
-                float hue = fmodf(col * 20.0f + t * 5.0f, 360.0f);
-                hsv(hue, 1.0f, v, &p->buf[i][0], &p->buf[i][1], &p->buf[i][2]);
-            } else {
-                p->buf[i][0] = (uint8_t)(p->color[0] * v);
-                p->buf[i][1] = (uint8_t)(p->color[1] * v);
-                p->buf[i][2] = (uint8_t)(p->color[2] * v);
-            }
+        float dist = fabsf(col - cx);
+        float wave = (sinf(dist * 0.8f - t) + 1.0f) * 0.5f;
+        /* Fade at edges */
+        float edge = 1.0f - dist / 10.0f;
+        if (edge < 0) edge = 0;
+        float v = wave * edge;
+        if (p->colorful) {
+            float hue = fmodf(dist * 30.0f - t * 15.0f, 360.0f);
+            if (hue < 0) hue += 360.0f;
+            hsv(hue, 1.0f, v, &p->buf[i][0], &p->buf[i][1], &p->buf[i][2]);
+        } else {
+            p->buf[i][0] = (uint8_t)(p->color[0] * v);
+            p->buf[i][1] = (uint8_t)(p->color[1] * v);
+            p->buf[i][2] = (uint8_t)(p->color[2] * v);
         }
     }
 }
