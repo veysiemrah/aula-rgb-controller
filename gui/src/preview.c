@@ -718,18 +718,7 @@ static void render_life(f87_preview_t *p)
     life_state_t *s = p->state;
     int interval = 15 - p->speed * 3; if (interval < 3) interval = 3;
 
-    if (0) {
-        int k = 0; /* Life cells are seeded by f87_preview_on_key */
-        int row = f87_key_layout[k].row, col = f87_key_layout[k].col;
-        for (int dr = -1; dr <= 1; dr++)
-            for (int dc = -1; dc <= 1; dc++) {
-                int r = row + dr, c = col + dc;
-                if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
-                    s->grid[r][c] = 1; s->bright[r][c] = 1.0f;
-                }
-            }
-    }
-
+    /* Cells are seeded by f87_preview_on_key clicks */
     s->step++;
     if (s->step >= interval) {
         s->step = 0;
