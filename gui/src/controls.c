@@ -478,6 +478,9 @@ static void do_send(F87Controls *ctrl)
     } else if (strcmp(ctrl->category, "hw") == 0) {
         uint8_t colorful = ctrl->colorful_switch ?
                            gtk_switch_get_active(ctrl->colorful_switch) : 0;
+        /* Rainbow effects must always send colorful=1 */
+        if (meta->tag && strcmp(meta->tag, "rainbow") == 0)
+            colorful = 1;
         rc = f87_app_state_start_hw(ctrl->state, ctrl->effect_id,
                                      brightness, speed, colorful,
                                      ctrl->selected_color[0],
