@@ -196,12 +196,14 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
         uint8_t g = self->colors[i][1];
         uint8_t b = self->colors[i][2];
 
+        /* Treat very dim LEDs as off — smooth transition to unlit state */
+        gboolean led_off = (r + g + b) < 12;
+
         /* Key base (slightly lighter than case) */
         draw_rounded_rect(cr, x, y, w, h, radius);
-        if (r == 0 && g == 0 && b == 0) {
+        if (led_off) {
             cairo_set_source_rgb(cr, 0.20, 0.20, 0.24);
         } else {
-            /* Blend effect color with key base */
             double fr = r / 255.0, fg = g / 255.0, fb = b / 255.0;
             cairo_set_source_rgb(cr, fr * 0.3 + 0.10,
                                      fg * 0.3 + 0.10,
@@ -216,7 +218,7 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
         double tw = w - 2 * inset, th = h - 2 * inset;
         if (tw > 0 && th > 0) {
             draw_rounded_rect(cr, tx, ty, tw, th, radius * 0.7);
-            if (r == 0 && g == 0 && b == 0) {
+            if (led_off) {
                 cairo_set_source_rgb(cr, 0.25, 0.25, 0.30);
             } else {
                 double fr = r / 255.0, fg = g / 255.0, fb = b / 255.0;
