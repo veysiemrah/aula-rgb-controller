@@ -405,6 +405,42 @@ static void inject_reactive_key(f87_preview_t *p, int key_id)
     s->idx++;
 }
 
+static void render_spectrum_hw(f87_preview_t *p)
+{
+    /* Spectrum: horizontal line spread from pressed key */
+    reactive_state_t *s = p->state;
+
+    for (int e = 0; e < REACTIVE_MAX; e++) {
+        if (s->items[e].strength <= 0) continue;
+        s->items[e].radius += 0.4f + (float)p->speed * 0.15f;
+        s->items[e].strength *= 0.90f;
+        if (s->items[e].strength < 0.01f) s->items[e].strength = 0;
+    }
+
+    memset(p->buf, 0, sizeof(p->buf));
+    for (int k = 0; k < KEY_COUNT; k++) {
+        float max_v = 0;
+        for (int e = 0; e < REACTIVE_MAX; e++) {
+            if (s->items[e].strength <= 0) continue;
+            int src = s->items[e].key_id;
+            /* Only horizontal distance — same row or close rows */
+            int row_diff = abs(f87_key_layout[k].row - f87_key_layout[src].row);
+            if (row_diff > 1) continue;
+            float dx = fabsf((float)(f87_key_layout[k].col - f87_key_layout[src].col));
+            if (dx <= s->items[e].radius) {
+                float v = (1.0f - dx / (s->items[e].radius + 1.0f)) * s->items[e].strength;
+                if (row_diff == 1) v *= 0.4f;  /* fade on adjacent rows */
+                if (v > max_v) max_v = v;
+            }
+        }
+        if (max_v > 0) {
+            p->buf[k][0] = (uint8_t)(p->color[0] * max_v);
+            p->buf[k][1] = (uint8_t)(p->color[1] * max_v);
+            p->buf[k][2] = (uint8_t)(p->color[2] * max_v);
+        }
+    }
+}
+
 static void render_explode(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
@@ -609,8 +645,8 @@ static void alloc_state(f87_preview_t *p)
     }
     case 104: p->state = g_new0(radar_state_t, 1); break;
     case 105: p->state = g_new0(lightning_state_t, 1); break;
-    case 110: case 111: p->state = g_new0(reactive_state_t, 1); break;
-    case 112: p->state = g_new0(typewriter_state_t, 1); break;
+    case 4: case 7: case 110: case 111: p->state = g_new0(reactive_state_t, 1); break;
+    case 12: case 112: p->state = g_new0(typewriter_state_t, 1); break;
     case 113: p->state = g_new0(life_state_t, 1); break;
     case 114: { keyheat_state_t *s = g_new0(keyheat_state_t, 1); s->max_heat = 1; p->state = s; break; }
     default: break;
@@ -624,13 +660,13 @@ static void render_frame(f87_preview_t *p)
     case 1:  render_static(p); break;
     case 2:  render_breathing(p); break;
     case 3:  render_wave(p); break;
-    case 4:  render_center_ripple(p); break;
+    case 4:  render_spectrum_hw(p); break;
     case 5:  render_rain(p); break;
-    case 7:  render_center_ripple(p); break;
+    case 7:  render_ripple_sw(p); break;  /* HW ripple ~ SW ripple visually */
     case 8:  render_starlight(p); break;
     case 10: render_snake(p); break;
     case 11: render_plasma(p); break;
-    case 12: render_starlight(p); break;
+    case 12: render_typewriter(p); break; /* HW reactive ~ typewriter glow */
     case 13: render_marquee(p); break;
     case 15: render_circle(p); break;
     case 16: render_raindown(p); break;
@@ -718,10 +754,13 @@ void f87_preview_on_key(f87_preview_t *prev, int key_id)
     if (!prev || key_id < 0 || key_id >= KEY_COUNT) return;
 
     switch (prev->effect_id) {
+    case 4:   /* Spectrum HW */
+    case 7:   /* Ripple HW */
     case 110: /* Explode */
     case 111: /* Ripple SW */
         inject_reactive_key(prev, key_id);
         break;
+    case 12:  /* Reactive HW — single key glow */
     case 112: { /* Typewriter */
         typewriter_state_t *s = prev->state;
         if (s) s->heat[key_id] = 1.0f;
@@ -759,6 +798,7 @@ void f87_preview_on_key(f87_preview_t *prev, int key_id)
 
 int f87_preview_is_reactive(int effect_id)
 {
-    return effect_id == 110 || effect_id == 111 || effect_id == 112 ||
+    return effect_id == 4 || effect_id == 7 || effect_id == 12 ||
+           effect_id == 110 || effect_id == 111 || effect_id == 112 ||
            effect_id == 113 || effect_id == 114;
 }
