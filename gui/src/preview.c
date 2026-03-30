@@ -393,11 +393,20 @@ static void render_lightning(f87_preview_t *p)
 }
 
 /* --- Reactive: simulated keypress -> expanding rings --- */
+/* Simulate realistic typing — cycle through common key positions */
+static const int typing_keys[] = {
+    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, /* A-; (home row) */
+    31, 32, 33, 34, 35, 36, 37, 38, 39, 40, /* Q-P */
+    64, 65, 66, 67, 68, 69, 70, 71,         /* Z-M */
+    80,                                       /* SPACE */
+};
+#define TYPING_KEY_COUNT (sizeof(typing_keys) / sizeof(typing_keys[0]))
+
 static void simulate_keypress(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
     int idx = s->idx % REACTIVE_MAX;
-    s->items[idx].key_id = rng_next(&p->rng) % KEY_COUNT;
+    s->items[idx].key_id = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
     s->items[idx].radius = 0.1f;
     s->items[idx].strength = 1.0f;
     s->items[idx].hue = (float)(rng_next(&p->rng) % 360);
@@ -478,7 +487,7 @@ static void render_typewriter(f87_preview_t *p)
 {
     typewriter_state_t *s = p->state;
     if (p->frame % (8 - p->speed) == 0) {
-        int k = rng_next(&p->rng) % KEY_COUNT;
+        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
         s->heat[k] = 1.0f;
     }
     float decay = 0.96f - (float)p->speed * 0.01f;
@@ -502,9 +511,9 @@ static void render_life(f87_preview_t *p)
     life_state_t *s = p->state;
     int interval = 15 - p->speed * 3; if (interval < 3) interval = 3;
 
-    /* Simulate random keypresses to seed cells */
+    /* Simulate typing to seed cells */
     if (p->frame % 20 == 0) {
-        int k = rng_next(&p->rng) % KEY_COUNT;
+        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
         int row = f87_key_layout[k].row, col = f87_key_layout[k].col;
         for (int dr = -1; dr <= 1; dr++)
             for (int dc = -1; dc <= 1; dc++) {
@@ -550,9 +559,9 @@ static void render_life(f87_preview_t *p)
 static void render_keyheat(f87_preview_t *p)
 {
     keyheat_state_t *s = p->state;
-    /* Simulate random key presses */
+    /* Simulate typing */
     if (p->frame % 3 == 0) {
-        int k = rng_next(&p->rng) % KEY_COUNT;
+        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
         s->heat[k] += 1.0f;
         if (s->heat[k] > s->max_heat) s->max_heat = s->heat[k];
     }
