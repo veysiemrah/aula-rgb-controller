@@ -235,6 +235,13 @@ static gboolean on_stop_shortcut(GtkWidget *widget, GVariant *args, gpointer dat
     return TRUE;
 }
 
+static gboolean on_close_request(GtkWindow *window, gpointer data)
+{
+    (void)data;
+    save_window_state(F87_WINDOW(window));
+    return FALSE;
+}
+
 static void f87_window_init(F87Window *self)
 {
     AdwHeaderBar *header = ADW_HEADER_BAR(adw_header_bar_new());
@@ -310,8 +317,9 @@ static void f87_window_init(F87Window *self)
     if (self->app_state.status == F87_GUI_ERROR)
         gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
 
-    /* Restore saved window size */
+    /* Restore saved window size + save on close */
     load_window_state(self);
+    g_signal_connect(self, "close-request", G_CALLBACK(on_close_request), NULL);
 
     /* Start connection poll timer */
     self->poll_timer = g_timeout_add(POLL_INTERVAL_MS, on_poll_connection, self);
@@ -320,7 +328,6 @@ static void f87_window_init(F87Window *self)
 static void f87_window_dispose(GObject *obj)
 {
     F87Window *self = F87_WINDOW(obj);
-    save_window_state(self);
     if (self->poll_timer) {
         g_source_remove(self->poll_timer);
         self->poll_timer = 0;
