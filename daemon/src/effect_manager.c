@@ -51,17 +51,34 @@ int f87d_effmgr_set_hw(f87d_effect_manager_t *mgr, f87_device *dev,
     return 0;
 }
 
+/* Hot-switch is only safe within the same category because different
+ * categories need different thread configurations:
+ *   SW: render thread only
+ *   SW reactive: render thread + input capture
+ *   Music: render thread + audio capture thread
+ *   Sensor: render thread + sensor polling
+ *
+ * Switching between these requires full stop + restart.
+ * Within the same category, f87_anim_set_effect safely swaps the renderer.
+ *
+ * For SW effects, we further check needs_input compatibility:
+ * non-reactive <-> reactive also needs restart for input thread.
+ */
+static int can_hot_switch(f87d_effect_manager_t *mgr,
+                           f87d_effect_category_t new_cat)
+{
+    if (!mgr->anim || !f87_anim_is_running(mgr->anim))
+        return 0;
+    return mgr->category == new_cat;
+}
+
 int f87d_effmgr_set_sw(f87d_effect_manager_t *mgr, f87_device *dev,
                         int effect_id, uint8_t brightness, uint8_t speed,
                         uint8_t r, uint8_t g, uint8_t b, int fps)
 {
     if (!dev) return -1;
 
-    /* Hot-switch: if animation is already running, change effect without
-     * stopping direct mode. This avoids a brief LED reset between effects. */
-    if (mgr->anim && f87_anim_is_running(mgr->anim) &&
-        (mgr->category == F87D_CAT_SW || mgr->category == F87D_CAT_MUSIC ||
-         mgr->category == F87D_CAT_SENSOR)) {
+    if (can_hot_switch(mgr, F87D_CAT_SW)) {
         f87_anim_set_effect(mgr->anim, (f87_sw_effect_id)effect_id);
         f87_anim_set_color(mgr->anim, r, g, b);
     } else {
@@ -94,10 +111,7 @@ int f87d_effmgr_set_music(f87d_effect_manager_t *mgr, f87_device *dev,
 {
     if (!dev) return -1;
 
-    /* Hot-switch if animation already running */
-    if (mgr->anim && f87_anim_is_running(mgr->anim) &&
-        (mgr->category == F87D_CAT_SW || mgr->category == F87D_CAT_MUSIC ||
-         mgr->category == F87D_CAT_SENSOR)) {
+    if (can_hot_switch(mgr, F87D_CAT_MUSIC)) {
         f87_anim_set_effect(mgr->anim, (f87_sw_effect_id)effect_id);
         f87_anim_set_color(mgr->anim, r, g, b);
     } else {
