@@ -16,6 +16,7 @@ Four-layer design:
 - **f87control** (`gui/`) — GTK4 + libadwaita GUI (communicates via daemon)
   - Sidebar layout with HW/SW/music/sensor effect categories
   - 88-key keyboard preview (cairo), dynamic control panel, color palette
+  - Sensor editor: profile dropdown, custom mapping (click-to-place), overlay labels
 
 ## Build
 
@@ -82,7 +83,7 @@ Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon
 - `lib/src/effects_sw.c` — 7 non-reactive software effects (fire, matrix, plasma, heatmap, radar, lightning, sensor)
 - `lib/src/effects_sw_reactive.c` — 5 reactive software effects (explode, ripple, typewriter, life, keyheat)
 - `lib/src/sensor.h` / `sensor.c` — sensor plugin interface, built-in sensors (cpu_temp, cpu_load, gpu_temp, ram_usage)
-- `lib/src/sensor_config.h` / `sensor_config.c` — JSON config parser for sensor-key mappings
+- `lib/src/sensor_config.h` / `sensor_config.c` — JSON config parser + writer for sensor-key mappings
 - `configs/sensor/*.json` — sensor profile configs (developer, gamer, system)
 - `lib/src/audio.c` — PulseAudio capture thread
 - `lib/src/spectrum.c` — KissFFT FFT, band grouping, beat detection
@@ -94,8 +95,9 @@ Options: `-DBUILD_GUI=ON` (GTK4 GUI), `-DBUILD_DAEMON=ON` (default, D-Bus daemon
 - `gui/src/window.c` — main window layout (sidebar + paned)
 - `gui/src/sidebar.c` — effect category list
 - `gui/src/controls.c` — dynamic control panel (HSV color picker, sliders, dropdowns)
-- `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget (interactive paint mode)
+- `gui/src/keyboard_view.c` — 88-key cairo keyboard preview widget (paint mode, sensor overlay, click mode)
 - `gui/src/preview.c` — live effect preview animation (15fps, matches real algorithms)
+- `gui/src/sensor_editor.h` / `sensor_editor.c` — sensor monitor UI: profile dropdown, custom editor, keyboard placement
 - `gui/src/app_state.c` — daemon client connection, effect lifecycle
 - `daemon/src/main.c` — daemon entry point, sd-bus event loop
 - `daemon/src/dbus_interface.c` — D-Bus method/signal/property handlers
@@ -216,6 +218,17 @@ cd build && ctest --output-on-failure
   - Build: -Wall -Wextra enabled, install rules, service file templates, test guards fixed
   - GUI: realistic keyboard layout from KB.ini coordinates (exact key sizes/positions)
   - GUI: batch preview redraw (88→1 queue_draw), sensor profile propagation
+- Faz 9: Sensor UI redesign + USB stability (complete)
+  - Single "Sensor Monitor" sidebar entry (replaces 3 separate profiles)
+  - Profile dropdown: Developer / Gamer / System / Custom
+  - Custom sensor editor: sensor dropdown with live values, mode toggle (single key/bar), bar length slider (2-8)
+  - Click-to-place keyboard assignment with collision detection
+  - Colored overlay borders + value labels on assigned keys
+  - Custom profile save/load as JSON (~/.config/f87control/profiles/sensor_custom.json)
+  - f87_sensor_config_save() in lib for JSON profile writing
+  - USB race fix: skip device poll USB probe during active animation, use animation error reporting instead
+  - Improved animation retry: 100ms settle, 6 retries with 20-640ms exponential backoff
+  - Mouse scroll disabled on all sliders
 
 ## Known Limitations (Firmware)
 
@@ -225,6 +238,7 @@ These are hardware/firmware constraints that cannot be resolved in software:
 - **Software-driven animation:** Direct mode (CMD 0x08) works at 30fps after Report 0x3C enable. Config write (cmd 0x04) causes brief LED reset — use CMD 0x08 for smooth animation instead.
 - **Effect IDs 6, 9, 14:** Not present in F87 TK firmware — keyboard skips these IDs.
 - **USB timing:** Commands sent too rapidly (~<200ms apart) can cause keyboard reset. 5ms delay between USB transfers required.
+- **USB concurrent access:** Device poll (check_alive) must NOT run during active animation — causes USB command interleaving and keyboard reset. Daemon skips USB probe when SW effect is running, relies on animation thread error reporting instead.
 - **SW animation FPS:** Capped at 25fps to prevent USB reset. Music effects allowed up to 60fps (experimental).
 
 ## Key Layout Quirks
