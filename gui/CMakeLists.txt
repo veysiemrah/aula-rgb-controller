@@ -53,6 +53,8 @@ target_compile_definitions(f87control PRIVATE
 )
 
 install(TARGETS f87control DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES resources/org.f87.Control.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
 # Gettext .po -> .mo compilation
 find_program(MSGFMT msgfmt)

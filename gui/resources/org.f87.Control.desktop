@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=AULA RGB Control
+Comment=RGB lighting control for AULA mechanical keyboards
+Comment[tr]=AULA mekanik klavyeler için RGB aydınlatma kontrolü
+Exec=f87control
+Icon=preferences-desktop-keyboard
+Type=Application
+Categories=Utility;HardwareSettings;GTK;
+Keywords=keyboard;rgb;lighting;aula;
