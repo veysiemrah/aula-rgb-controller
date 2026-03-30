@@ -422,6 +422,7 @@ static void render_spectrum_hw(f87_preview_t *p)
     for (int k = 0; k < KEY_COUNT; k++) {
         float max_v = 0;
         float best_hue = 0;
+        float best_dist = 0;
         for (int e = 0; e < REACTIVE_MAX; e++) {
             if (s->items[e].strength <= 0) continue;
             int src = s->items[e].key_id;
@@ -429,13 +430,15 @@ static void render_spectrum_hw(f87_preview_t *p)
             float dx = fabsf((float)(f87_key_layout[k].col - f87_key_layout[src].col));
             if (dx <= s->items[e].radius) {
                 float v = (1.0f - dx / (s->items[e].radius + 1.0f)) * s->items[e].strength;
-                if (v > max_v) { max_v = v; best_hue = s->items[e].hue; }
+                if (v > max_v) { max_v = v; best_hue = s->items[e].hue; best_dist = dx; }
             }
         }
         if (max_v > 0) {
             if (p->colorful) {
+                /* Color shifts with distance from source — rainbow spread */
+                float dist_hue = fmodf(best_hue + best_dist * 25.0f, 360.0f);
                 uint8_t cr, cg, cb;
-                hsv(best_hue, 1.0f, max_v, &cr, &cg, &cb);
+                hsv(dist_hue, 1.0f, max_v, &cr, &cg, &cb);
                 p->buf[k][0] = cr; p->buf[k][1] = cg; p->buf[k][2] = cb;
             } else {
                 p->buf[k][0] = (uint8_t)(p->color[0] * max_v);
