@@ -1,7 +1,36 @@
+# Build
 build/
 *.o
 *.so
 *.so.*
 compile_commands.json
+
+# IDE / editor
 .cache/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code / Superpowers
+.claude/
 .superpowers/
+docs/superpowers/
+docs/plans/
+CLAUDE.md
+
+# Reverse engineering artifacts
+*.pcap
+*.zip
+
+# Vendor software / reference
+AULA F87*/
+BYCOMBO4/
+
+# Test artifacts
+Testing/
+
+# Analysis scripts and RE notes (kept locally, not distributed)
+tools/*.py
+tools/*.bat
+tools/yeni_bulgular.md

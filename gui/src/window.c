@@ -363,6 +363,6 @@ F87Window *f87_window_new(AdwApplication *app)
 {
     return g_object_new(F87_TYPE_WINDOW,
                         "application", app,
-                        "title", "F87Control",
+                        "title", "AULA RGB Control",
                         NULL);
 }
