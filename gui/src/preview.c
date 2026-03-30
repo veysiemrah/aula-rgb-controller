@@ -125,9 +125,11 @@ static void render_breathing(f87_preview_t *p)
 
 static void render_wave(f87_preview_t *p)
 {
-    float t = (float)p->frame * speed_mult(p->speed) * 2.0f;
+    float t = (float)p->frame * speed_mult(p->speed) * 3.0f;
     for (int i = 0; i < KEY_COUNT; i++) {
-        float hue = fmodf(f87_key_layout[i].col * 20.0f + t, 360.0f);
+        /* Spread 2 full rainbow cycles across keyboard width (17 cols) */
+        float hue = fmodf(f87_key_layout[i].col * (720.0f / 17.0f) - t, 360.0f);
+        if (hue < 0) hue += 360.0f;
         hsv(hue, 1.0f, 1.0f, &p->buf[i][0], &p->buf[i][1], &p->buf[i][2]);
     }
 }
