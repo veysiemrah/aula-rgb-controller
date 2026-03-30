@@ -166,13 +166,29 @@ int main(int argc, char **argv)
         uint64_t now_us = (uint64_t)ts.tv_sec * 1000000ULL +
                           (uint64_t)ts.tv_nsec / 1000ULL;
         if (now_us - last_poll_us >= poll_interval_us) {
-            f87d_devmgr_poll(&g_devmgr, &g_dev_cbs);
             last_poll_us = now_us;
 
-            /* Idle timeout: disabled while SW effect running */
             if (f87d_effmgr_has_sw_running(&g_effmgr)) {
+                /* Animation running — do NOT send USB probe (causes race).
+                 * Instead check if animation thread reported an error. */
+                if (g_effmgr.anim && !f87_anim_is_running(g_effmgr.anim)) {
+                    int err = f87_anim_get_error(g_effmgr.anim);
+                    F87_WARN(F87_SRC_DEVICE,
+                             "Animation stopped with error %d, treating as disconnect", err);
+                    f87d_effmgr_stop(&g_effmgr);
+                    /* Verify device is still there */
+                    if (!f87d_devmgr_check_alive(&g_devmgr)) {
+                        g_devmgr.connected = false;
+                        f87d_dbus_emit_device_disconnected(&g_dbus_ctx);
+                        f87_close(g_devmgr.dev);
+                        g_devmgr.dev = NULL;
+                    }
+                }
                 f87d_idle_set_enabled(&g_idle, false);
             } else {
+                /* No animation — safe to probe USB */
+                f87d_devmgr_poll(&g_devmgr, &g_dev_cbs);
+
                 f87d_idle_set_enabled(&g_idle, true);
                 if (f87d_idle_check(&g_idle)) {
                     F87_INFO(F87_SRC_DBUS, "Idle timeout, exiting");

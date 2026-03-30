@@ -191,14 +191,14 @@ static void *anim_thread_func(void *arg)
         usleep(F87_CMD_DELAY_US);
 
         if (rc < 0) {
-            /* Re-enable direct mode — keyboard may have timed out */
-            usleep(50000);  /* 50ms settle */
+            /* USB transient error — let keyboard settle, then re-enable direct mode */
+            usleep(100000);  /* 100ms settle */
             f87_direct_mode_enable(ctx->dev);
-            usleep(F87_CMD_DELAY_US);
+            usleep(50000);   /* 50ms after mode enable */
 
-            /* Retry with exponential backoff */
-            int retries = 5;
-            useconds_t backoff = 10000;  /* 10ms, 20ms, 40ms, 80ms, 160ms */
+            /* Retry with exponential backoff: 20ms, 40ms, 80ms, 160ms, 320ms, 640ms */
+            int retries = 6;
+            useconds_t backoff = 20000;
             while (rc < 0 && retries-- > 0) {
                 usleep(backoff);
                 rc = f87_direct_send_frame(ctx->dev, colors, f87_led_index, F87_KEY_COUNT);
