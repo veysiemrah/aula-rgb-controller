@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: f87control\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-30 17:31+0300\n"
+"POT-Creation-Date: 2026-03-30 17:41+0300\n"
 "PO-Revision-Date: 2026-03-30 17:31+0300\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -30,7 +30,7 @@ msgstr "Daemon'a bağlanılamadı"
 msgid "Could not get daemon status"
 msgstr "Daemon durumu alınamadı"
 
-#: gui/src/app_state.c:36 gui/src/app_state.c:73
+#: gui/src/app_state.c:36 gui/src/app_state.c:73 gui/src/window.c:95
 msgid "Connected (daemon)"
 msgstr "Bağlı (daemon)"
 
@@ -42,7 +42,7 @@ msgstr "Klavye bulunamadı"
 msgid "Scan failed"
 msgstr "Tarama başarısız"
 
-#: gui/src/app_state.c:112 gui/src/app_state.c:172
+#: gui/src/app_state.c:112 gui/src/app_state.c:172 gui/src/window.c:128
 msgid "Connection lost — could not reconnect"
 msgstr "Klavye bağlantısı koptu — yeniden bağlanamadı"
 
@@ -56,7 +56,7 @@ msgid "Stop failed"
 msgstr "Durdurma hatası"
 
 #. Status bar
-#: gui/src/app_state.c:201 gui/src/window.c:157
+#: gui/src/app_state.c:201 gui/src/window.c:233
 msgid "Waiting"
 msgstr "Bekleniyor"
 
@@ -292,11 +292,16 @@ msgstr "Sistem izleme profili"
 msgid "Sensor"
 msgstr "Sensör"
 
-#: gui/src/window.c:67
+#: gui/src/window.c:74
 #, c-format
 msgid "Selected: %s"
 msgstr "Seçilen: %s"
 
-#: gui/src/window.c:118
+#: gui/src/window.c:134
+#, c-format
+msgid "Reconnecting... (%d/%d)"
+msgstr "Yeniden bağlanılıyor... (%d/%d)"
+
+#: gui/src/window.c:194
 msgid "Rescan for keyboard"
 msgstr "Klavyeyi yeniden tara"

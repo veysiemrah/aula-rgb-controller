@@ -7,6 +7,10 @@
 #include "i18n.h"
 #include <stdio.h>
 
+/* Auto-reconnect: poll every 3s, give up after 3 consecutive failures */
+#define POLL_INTERVAL_MS  3000
+#define RECONNECT_MAX     3
+
 struct _F87Window {
     AdwApplicationWindow parent;
     GtkPaned *paned;
@@ -18,6 +22,9 @@ struct _F87Window {
     F87Controls *controls;
     F87KeyboardView *keyboard;
     guint rescan_timer;
+    guint poll_timer;
+    int reconnect_failures;
+    gboolean was_connected;
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
@@ -68,6 +75,73 @@ static void on_effect_selected(const char *category, const char *effect_name,
     gtk_label_set_text(self->status_label, buf);
 }
 
+/* ===== Auto-reconnect poll ===== */
+
+static gboolean on_poll_connection(gpointer data)
+{
+    F87Window *self = data;
+    if (!self->app_state.client) return G_SOURCE_CONTINUE;
+
+    int connected = f87_client_is_connected(self->app_state.client) > 0;
+
+    if (connected) {
+        /* Connection OK — reset failure counter */
+        if (!self->was_connected) {
+            self->was_connected = TRUE;
+            self->reconnect_failures = 0;
+            self->app_state.device_connected = true;
+            snprintf(self->app_state.status_text,
+                     sizeof(self->app_state.status_text),
+                     "%s", _("Connected (daemon)"));
+            self->app_state.status = F87_GUI_IDLE;
+            self->app_state.status_level = F87_LOG_INFO;
+            on_status_update(self->app_state.status_text, self);
+        }
+        return G_SOURCE_CONTINUE;
+    }
+
+    /* Disconnected */
+    if (self->was_connected) {
+        /* Just lost connection — start reconnect attempts */
+        self->was_connected = FALSE;
+        self->reconnect_failures = 0;
+    }
+
+    if (self->reconnect_failures >= RECONNECT_MAX) {
+        /* Already gave up — keep polling but don't spam rescan */
+        return G_SOURCE_CONTINUE;
+    }
+
+    /* Attempt rescan */
+    self->reconnect_failures++;
+    f87_app_state_rescan(&self->app_state);
+
+    if (self->app_state.device_connected) {
+        /* Reconnected! */
+        self->was_connected = TRUE;
+        self->reconnect_failures = 0;
+        on_status_update(self->app_state.status_text, self);
+    } else if (self->reconnect_failures >= RECONNECT_MAX) {
+        /* Final attempt failed */
+        snprintf(self->app_state.status_text,
+                 sizeof(self->app_state.status_text),
+                 "%s", _("Connection lost — could not reconnect"));
+        self->app_state.status = F87_GUI_ERROR;
+        self->app_state.status_level = F87_LOG_ERROR;
+        on_status_update(self->app_state.status_text, self);
+    } else {
+        char buf[256];
+        snprintf(buf, sizeof(buf), _("Reconnecting... (%d/%d)"),
+                 self->reconnect_failures, RECONNECT_MAX);
+        gtk_label_set_text(self->status_label, buf);
+        gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-ok");
+        gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-error");
+        gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-warn");
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
 /* Rescan button */
 static gboolean on_rescan_cooldown(gpointer data)
 {
@@ -81,7 +155,9 @@ static void on_rescan_clicked(GtkButton *btn, gpointer data)
 {
     (void)btn;
     F87Window *self = data;
+    self->reconnect_failures = 0;  /* Reset so auto-reconnect retries too */
     f87_app_state_rescan(&self->app_state);
+    self->was_connected = self->app_state.device_connected;
     on_status_update(self->app_state.status_text, self);
 
     /* 2s cooldown to prevent USB rapid commands */
@@ -179,14 +255,22 @@ static void f87_window_init(F87Window *self)
 
     /* Initialize device connection */
     f87_app_state_init(&self->app_state);
+    self->was_connected = self->app_state.device_connected;
     gtk_label_set_text(self->status_label, self->app_state.status_text);
     if (self->app_state.status == F87_GUI_ERROR)
         gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
+
+    /* Start connection poll timer */
+    self->poll_timer = g_timeout_add(POLL_INTERVAL_MS, on_poll_connection, self);
 }
 
 static void f87_window_dispose(GObject *obj)
 {
     F87Window *self = F87_WINDOW(obj);
+    if (self->poll_timer) {
+        g_source_remove(self->poll_timer);
+        self->poll_timer = 0;
+    }
     if (self->rescan_timer) {
         g_source_remove(self->rescan_timer);
         self->rescan_timer = 0;
