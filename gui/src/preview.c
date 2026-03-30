@@ -673,6 +673,27 @@ static void render_typewriter(f87_preview_t *p)
     }
 }
 
+static void render_reactive_hw(f87_preview_t *p)
+{
+    /* HW Reactive: pressed key glows with selected color then fades */
+    typewriter_state_t *s = p->state;
+    float decay = 0.92f - (float)p->speed * 0.02f;
+    for (int k = 0; k < KEY_COUNT; k++) {
+        s->heat[k] *= decay;
+        float h = s->heat[k];
+        if (h < 0.01f) { memset(p->buf[k], 0, 3); continue; }
+        if (p->colorful) {
+            uint32_t seed = (uint32_t)(k * 31337);
+            float hue = (float)(rng_next(&seed) % 360);
+            hsv(hue, 1.0f, h, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
+        } else {
+            p->buf[k][0] = (uint8_t)(p->color[0] * h);
+            p->buf[k][1] = (uint8_t)(p->color[1] * h);
+            p->buf[k][2] = (uint8_t)(p->color[2] * h);
+        }
+    }
+}
+
 static void render_life(f87_preview_t *p)
 {
     life_state_t *s = p->state;
@@ -811,7 +832,7 @@ static void render_frame(f87_preview_t *p)
     case 8:  render_starlight(p); break;
     case 10: render_snake(p); break;
     case 11: render_aurora(p); break;
-    case 12: render_typewriter(p); break; /* HW reactive ~ typewriter glow */
+    case 12: render_reactive_hw(p); break;
     case 13: render_marquee(p); break;
     case 15: render_circle(p); break;
     case 16: render_raindown(p); break;
