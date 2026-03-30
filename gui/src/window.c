@@ -8,10 +8,6 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-#ifdef GDK_WINDOWING_X11
-#include <gdk/x11/gdkx.h>
-#include <X11/Xlib.h>
-#endif
 
 /* Auto-reconnect: poll every 3s, give up after 3 consecutive failures */
 #define POLL_INTERVAL_MS  3000
@@ -35,51 +31,18 @@ static void save_window_state(F87Window *self)
     gboolean maximized = gtk_window_is_maximized(GTK_WINDOW(self));
     int w = gtk_widget_get_width(GTK_WIDGET(self));
     int h = gtk_widget_get_height(GTK_WIDGET(self));
-    int x = -1, y = -1;
-
-#ifdef GDK_WINDOWING_X11
-    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(self));
-    if (surface && GDK_IS_X11_SURFACE(surface)) {
-        Display *xdisplay = gdk_x11_display_get_xdisplay(gdk_surface_get_display(surface));
-        Window xwindow = gdk_x11_surface_get_xid(surface);
-        Window child;
-        XTranslateCoordinates(xdisplay, xwindow,
-                               DefaultRootWindow(xdisplay),
-                               0, 0, &x, &y, &child);
-    }
-#endif
 
     FILE *f = fopen(path, "w");
     if (f) {
-        fprintf(f, "width=%d\nheight=%d\nmaximized=%d\nx=%d\ny=%d\n",
-                w, h, maximized ? 1 : 0, x, y);
+        fprintf(f, "width=%d\nheight=%d\nmaximized=%d\n", w, h, maximized ? 1 : 0);
         fclose(f);
     }
     g_free(path);
 }
 
-static void apply_saved_position(GtkWidget *widget, gpointer data)
-{
-    (void)widget;
-    int *pos = data;
-    int x = pos[0], y = pos[1];
-    g_free(pos);
-
-    if (x < 0 || y < 0) return;
-
-#ifdef GDK_WINDOWING_X11
-    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(widget));
-    if (surface && GDK_IS_X11_SURFACE(surface)) {
-        Display *xdisplay = gdk_x11_display_get_xdisplay(gdk_surface_get_display(surface));
-        Window xwindow = gdk_x11_surface_get_xid(surface);
-        XMoveWindow(xdisplay, xwindow, x, y);
-    }
-#endif
-}
-
 static void load_window_state(F87Window *self)
 {
-    int w = 1000, h = 550, maximized = 0, x = -1, y = -1;
+    int w = 1000, h = 550, maximized = 0;
 
     char *path = get_state_path();
     FILE *f = fopen(path, "r");
@@ -90,8 +53,6 @@ static void load_window_state(F87Window *self)
             sscanf(line, "width=%d", &w);
             sscanf(line, "height=%d", &h);
             sscanf(line, "maximized=%d", &maximized);
-            sscanf(line, "x=%d", &x);
-            sscanf(line, "y=%d", &y);
         }
         fclose(f);
     }
@@ -100,13 +61,6 @@ static void load_window_state(F87Window *self)
         gtk_window_set_default_size(GTK_WINDOW(self), w, h);
     if (maximized)
         gtk_window_maximize(GTK_WINDOW(self));
-
-    /* Position can only be set after surface is realized (X11 only) */
-    if (x >= 0 && y >= 0) {
-        int *pos = g_new(int, 2);
-        pos[0] = x; pos[1] = y;
-        g_signal_connect(self, "realize", G_CALLBACK(apply_saved_position), pos);
-    }
 }
 
 struct _F87Window {
