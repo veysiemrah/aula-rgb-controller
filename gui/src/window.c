@@ -6,10 +6,60 @@
 #include "effect_meta.h"
 #include "i18n.h"
 #include <stdio.h>
+#include <sys/stat.h>
 
 /* Auto-reconnect: poll every 3s, give up after 3 consecutive failures */
 #define POLL_INTERVAL_MS  3000
 #define RECONNECT_MAX     3
+
+/* ===== Window state persistence ===== */
+
+static char *get_state_path(void)
+{
+    const char *config = g_get_user_config_dir();
+    char *dir = g_build_filename(config, "f87control", NULL);
+    g_mkdir_with_parents(dir, 0755);
+    char *path = g_build_filename(dir, "window.conf", NULL);
+    g_free(dir);
+    return path;
+}
+
+static void save_window_state(F87Window *self)
+{
+    char *path = get_state_path();
+    gboolean maximized = gtk_window_is_maximized(GTK_WINDOW(self));
+    int w = gtk_widget_get_width(GTK_WIDGET(self));
+    int h = gtk_widget_get_height(GTK_WIDGET(self));
+
+    FILE *f = fopen(path, "w");
+    if (f) {
+        fprintf(f, "width=%d\nheight=%d\nmaximized=%d\n", w, h, maximized ? 1 : 0);
+        fclose(f);
+    }
+    g_free(path);
+}
+
+static void load_window_state(F87Window *self)
+{
+    char *path = get_state_path();
+    FILE *f = fopen(path, "r");
+    g_free(path);
+    if (!f) return;
+
+    int w = 0, h = 0, maximized = 0;
+    char line[64];
+    while (fgets(line, sizeof(line), f)) {
+        sscanf(line, "width=%d", &w);
+        sscanf(line, "height=%d", &h);
+        sscanf(line, "maximized=%d", &maximized);
+    }
+    fclose(f);
+
+    if (w > 200 && h > 200)
+        gtk_window_set_default_size(GTK_WINDOW(self), w, h);
+    if (maximized)
+        gtk_window_maximize(GTK_WINDOW(self));
+}
 
 struct _F87Window {
     AdwApplicationWindow parent;
@@ -260,6 +310,9 @@ static void f87_window_init(F87Window *self)
     if (self->app_state.status == F87_GUI_ERROR)
         gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-error");
 
+    /* Restore saved window size */
+    load_window_state(self);
+
     /* Start connection poll timer */
     self->poll_timer = g_timeout_add(POLL_INTERVAL_MS, on_poll_connection, self);
 }
@@ -267,6 +320,7 @@ static void f87_window_init(F87Window *self)
 static void f87_window_dispose(GObject *obj)
 {
     F87Window *self = F87_WINDOW(obj);
+    save_window_state(self);
     if (self->poll_timer) {
         g_source_remove(self->poll_timer);
         self->poll_timer = 0;
