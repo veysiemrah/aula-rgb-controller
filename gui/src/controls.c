@@ -281,6 +281,21 @@ static void on_preset_clicked(GtkButton *btn, gpointer data)
 
 /* ===== SLIDER HELPER ===== */
 
+static gboolean on_scroll_eat(GtkEventControllerScroll *ctrl, double dx, double dy,
+                               gpointer data)
+{
+    (void)ctrl; (void)dx; (void)dy; (void)data;
+    return TRUE;   /* swallow the event */
+}
+
+static void disable_scroll_on_scale(GtkWidget *scale)
+{
+    GtkEventController *sc = gtk_event_controller_scroll_new(
+        GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES);
+    g_signal_connect(sc, "scroll", G_CALLBACK(on_scroll_eat), NULL);
+    gtk_widget_add_controller(scale, sc);
+}
+
 static GtkWidget *create_slider(const char *label_text, double min, double max,
                                  double value, double step, GtkScale **out)
 {
@@ -296,6 +311,7 @@ static GtkWidget *create_slider(const char *label_text, double min, double max,
     gtk_range_set_value(GTK_RANGE(scale), value);
     gtk_scale_set_draw_value(scale, TRUE);
     gtk_widget_set_hexpand(GTK_WIDGET(scale), TRUE);
+    disable_scroll_on_scale(GTK_WIDGET(scale));
     gtk_box_append(box, GTK_WIDGET(scale));
 
     gtk_widget_set_hexpand(GTK_WIDGET(box), TRUE);
@@ -451,6 +467,7 @@ static GtkWidget *create_color_picker(F87Controls *ctrl)
     gtk_scale_set_draw_value(ctrl->hue_scale, FALSE);
     gtk_widget_add_css_class(GTK_WIDGET(ctrl->hue_scale), "hue-slider");
     g_signal_connect(ctrl->hue_scale, "value-changed", G_CALLBACK(on_hue_changed), ctrl);
+    disable_scroll_on_scale(GTK_WIDGET(ctrl->hue_scale));
     gtk_box_append(right, GTK_WIDGET(ctrl->hue_scale));
 
     /* Hex input + preview swatch */

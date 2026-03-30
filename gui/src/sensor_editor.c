@@ -77,6 +77,23 @@ struct _F87SensorEditor {
     char custom_path[256];
 };
 
+/* ===== Scroll disable helper ===== */
+
+static gboolean on_scroll_eat(GtkEventControllerScroll *ctrl, double dx, double dy,
+                               gpointer data)
+{
+    (void)ctrl; (void)dx; (void)dy; (void)data;
+    return TRUE;
+}
+
+static void disable_scroll_on_scale(GtkWidget *scale)
+{
+    GtkEventController *sc = gtk_event_controller_scroll_new(
+        GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES);
+    g_signal_connect(sc, "scroll", G_CALLBACK(on_scroll_eat), NULL);
+    gtk_widget_add_controller(scale, sc);
+}
+
 /* ===== Forward declarations ===== */
 
 static void rebuild_mappings_list(F87SensorEditor *ed);
@@ -480,6 +497,7 @@ F87SensorEditor *f87_sensor_editor_new(F87KeyboardView *keyboard, f87_app_state_
     gtk_range_set_value(GTK_RANGE(ed->brightness_scale), 3);
     gtk_scale_set_draw_value(ed->brightness_scale, TRUE);
     gtk_widget_set_hexpand(GTK_WIDGET(ed->brightness_scale), TRUE);
+    disable_scroll_on_scale(GTK_WIDGET(ed->brightness_scale));
     gtk_box_append(br_row, GTK_WIDGET(ed->brightness_scale));
     gtk_box_append(ed->container, GTK_WIDGET(br_row));
 
@@ -536,6 +554,7 @@ F87SensorEditor *f87_sensor_editor_new(F87KeyboardView *keyboard, f87_app_state_
     gtk_range_set_value(GTK_RANGE(ed->bar_length_scale), 4);
     gtk_scale_set_draw_value(ed->bar_length_scale, TRUE);
     gtk_widget_set_hexpand(GTK_WIDGET(ed->bar_length_scale), TRUE);
+    disable_scroll_on_scale(GTK_WIDGET(ed->bar_length_scale));
     gtk_box_append(bar_row, GTK_WIDGET(ed->bar_length_scale));
     ed->bar_length_row = GTK_WIDGET(bar_row);
     gtk_box_append(ed->editor_box, ed->bar_length_row);
