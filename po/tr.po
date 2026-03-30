@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: f87control\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-30 20:45+0300\n"
+"POT-Creation-Date: 2026-03-30 21:14+0300\n"
 "PO-Revision-Date: 2026-03-30 17:31+0300\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -68,77 +68,77 @@ msgstr "Per-key renkler gönderilemedi"
 msgid "Custom running"
 msgstr "Custom çalışıyor"
 
-#: gui/src/controls.c:456 gui/src/controls.c:757 gui/src/controls.c:836
+#: gui/src/controls.c:464
+msgid "Stop"
+msgstr "Durdur"
+
+#: gui/src/controls.c:468
+msgid "Start"
+msgstr "Başlat"
+
+#: gui/src/controls.c:473 gui/src/controls.c:891
 msgid "Save"
 msgstr "Kaydet"
 
-#: gui/src/controls.c:528
-msgid "Saving..."
-msgstr "Kaydediliyor..."
-
-#: gui/src/controls.c:603
+#: gui/src/controls.c:647
 msgid "Click keyboard to preview"
 msgstr "Önizleme için klavyeye tıkla"
 
-#: gui/src/controls.c:631
+#: gui/src/controls.c:675
 msgid "Brightness"
 msgstr "Parlaklık"
 
-#: gui/src/controls.c:634
+#: gui/src/controls.c:678
 msgid "Speed"
 msgstr "Hız"
 
-#: gui/src/controls.c:640
+#: gui/src/controls.c:684
 msgid "Colorful mode"
 msgstr "Renkli mod"
 
-#: gui/src/controls.c:648
+#: gui/src/controls.c:692
 msgid "mixed colors"
 msgstr "karışık renkler"
 
-#: gui/src/controls.c:657
+#: gui/src/controls.c:701
 msgid "Source"
 msgstr "Kaynak"
 
-#: gui/src/controls.c:662
+#: gui/src/controls.c:706
 msgid "System Audio"
 msgstr "Sistem Sesi"
 
-#: gui/src/controls.c:662
+#: gui/src/controls.c:706
 msgid "Microphone"
 msgstr "Mikrofon"
 
-#: gui/src/controls.c:668
+#: gui/src/controls.c:712
 msgid "Auto Gain"
 msgstr "Otomatik Kazanç"
 
-#: gui/src/controls.c:677
+#: gui/src/controls.c:721
 msgid "Gain"
 msgstr "Kazanç"
 
-#: gui/src/controls.c:682
+#: gui/src/controls.c:726
 msgid "Profile"
 msgstr "Profil"
 
-#: gui/src/controls.c:694
+#: gui/src/controls.c:738
 msgid "Select color, paint by clicking keys"
 msgstr "Renk seç, tuşlarını tıklayarak boya"
 
-#: gui/src/controls.c:701
+#: gui/src/controls.c:745
 msgid "Fill All"
 msgstr "Tümünü Boya"
 
-#: gui/src/controls.c:703
+#: gui/src/controls.c:747
 msgid "Clear"
 msgstr "Temizle"
 
-#: gui/src/controls.c:826
+#: gui/src/controls.c:881
 msgid "Select effect"
 msgstr "Efekt seçiniz"
-
-#: gui/src/controls.c:842
-msgid "Stop"
-msgstr "Durdur"
 
 #. HW effects
 #: gui/src/effect_meta.c:15 gui/src/sidebar.c:76
@@ -313,6 +313,9 @@ msgstr "Yeniden bağlanılıyor... (%d/%d)"
 #: gui/src/window.c:253
 msgid "Rescan for keyboard"
 msgstr "Klavyeyi yeniden tara"
+
+#~ msgid "Saving..."
+#~ msgstr "Kaydediliyor..."
 
 #~ msgid "Colorful explosions on key press"
 #~ msgstr "Tuş basımında renkli patlama"

@@ -55,6 +55,7 @@ struct _F87Controls {
     int sv_cache_h;
 
     guint loading_timer;
+    gboolean sw_running;  /* direct mode animation active */
 
     F87KeyboardView *keyboard;
     f87_preview_t *preview;
@@ -447,38 +448,107 @@ static GtkWidget *create_color_picker(F87Controls *ctrl)
     return GTK_WIDGET(right);
 }
 
+/* ===== Helper: is current effect direct-mode (SW/music/sensor)? ===== */
+
+static gboolean is_direct_mode_effect(F87Controls *ctrl)
+{
+    return strcmp(ctrl->category, "hw") != 0;
+}
+
+/* ===== Update button label/style based on state ===== */
+
+static void update_button_state(F87Controls *ctrl)
+{
+    if (is_direct_mode_effect(ctrl)) {
+        if (ctrl->sw_running) {
+            gtk_button_set_label(ctrl->send_button, _("Stop"));
+            gtk_widget_remove_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
+            gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "stop-button");
+        } else {
+            gtk_button_set_label(ctrl->send_button, _("Start"));
+            gtk_widget_remove_css_class(GTK_WIDGET(ctrl->send_button), "stop-button");
+            gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
+        }
+    } else {
+        gtk_button_set_label(ctrl->send_button, _("Save"));
+        gtk_widget_remove_css_class(GTK_WIDGET(ctrl->send_button), "stop-button");
+        gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
+    }
+}
+
 /* ===== SEND / STOP ===== */
 
 static gboolean on_loading_done(gpointer data)
 {
     F87Controls *ctrl = data;
     ctrl->loading_timer = 0;
-    gtk_button_set_label(ctrl->send_button, _("Save"));
     gtk_widget_set_sensitive(GTK_WIDGET(ctrl->send_button), TRUE);
     gtk_widget_remove_css_class(GTK_WIDGET(ctrl->send_button), "loading");
+    update_button_state(ctrl);
     return G_SOURCE_REMOVE;
+}
+
+static int send_sw_effect(F87Controls *ctrl)
+{
+    uint8_t brightness = ctrl->brightness_scale ?
+                         (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->brightness_scale)) : 3;
+    uint8_t speed = ctrl->speed_scale ?
+                    (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->speed_scale)) : 2;
+    const effect_meta_t *meta = effect_meta_lookup(ctrl->effect_id);
+
+    f87_anim_config_t config = {0};
+    gboolean colorful_on = ctrl->colorful_switch &&
+                           gtk_switch_get_active(ctrl->colorful_switch);
+    if (!colorful_on) {
+        config.color[0] = ctrl->selected_color[0];
+        config.color[1] = ctrl->selected_color[1];
+        config.color[2] = ctrl->selected_color[2];
+    }
+    config.brightness = brightness;
+    config.speed = speed;
+
+    if (meta->flags & F87_PARAM_AUDIO) {
+        guint src_idx = ctrl->source_dropdown ?
+                        gtk_drop_down_get_selected(ctrl->source_dropdown) : 0;
+        config.audio_source = (f87_audio_source_t)src_idx;
+
+        if (ctrl->auto_gain_switch && gtk_switch_get_active(ctrl->auto_gain_switch))
+            config.gain = 0;
+        else if (ctrl->gain_scale)
+            config.gain = (float)gtk_range_get_value(GTK_RANGE(ctrl->gain_scale));
+    }
+
+    if (meta->flags & F87_PARAM_PROFILE) {
+        if (ctrl->sensor_profile_dropdown) {
+            guint idx = gtk_drop_down_get_selected(ctrl->sensor_profile_dropdown);
+            const char *profiles[] = {"developer", "gamer", "system"};
+            if (idx < 3)
+                config.sensor_profile = profiles[idx];
+        }
+    }
+
+    return f87_app_state_start_sw(ctrl->state, ctrl->effect_id, &config);
 }
 
 static void do_send(F87Controls *ctrl)
 {
-    if (!ctrl->brightness_scale) return;
-
-    uint8_t brightness = (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->brightness_scale));
-    uint8_t speed = ctrl->speed_scale ?
-                    (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->speed_scale)) : 2;
-
     const effect_meta_t *meta = effect_meta_lookup(ctrl->effect_id);
     int rc = -1;
 
     if (meta->flags & F87_PARAM_PAINT) {
+        /* Custom per-key: one-shot send */
         if (ctrl->keyboard) {
             const uint8_t (*colors)[3] = f87_keyboard_view_get_colors(ctrl->keyboard);
             rc = f87_app_state_apply_custom(ctrl->state, colors, 88);
         }
     } else if (strcmp(ctrl->category, "hw") == 0) {
+        /* HW effect: one-shot config write */
+        uint8_t brightness = ctrl->brightness_scale ?
+                             (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->brightness_scale)) : 3;
+        uint8_t speed = ctrl->speed_scale ?
+                        (uint8_t)gtk_range_get_value(GTK_RANGE(ctrl->speed_scale)) : 2;
         uint8_t colorful = ctrl->colorful_switch ?
                            gtk_switch_get_active(ctrl->colorful_switch) : 0;
-        /* Rainbow effects must always send colorful=1 */
         if (meta->tag && strcmp(meta->tag, "rainbow") == 0)
             colorful = 1;
         rc = f87_app_state_start_hw(ctrl->state, ctrl->effect_id,
@@ -487,45 +557,23 @@ static void do_send(F87Controls *ctrl)
                                      ctrl->selected_color[1],
                                      ctrl->selected_color[2]);
     } else {
-        f87_anim_config_t config = {0};
-        gboolean colorful_on = ctrl->colorful_switch &&
-                               gtk_switch_get_active(ctrl->colorful_switch);
-        if (!colorful_on) {
-            config.color[0] = ctrl->selected_color[0];
-            config.color[1] = ctrl->selected_color[1];
-            config.color[2] = ctrl->selected_color[2];
+        /* SW/Music/Sensor: toggle start/stop */
+        if (ctrl->sw_running) {
+            /* Stop */
+            f87_app_state_stop(ctrl->state);
+            ctrl->sw_running = FALSE;
+            update_status(ctrl, ctrl->state->status_text);
+            update_button_state(ctrl);
+            return;
         }
-        /* colorful_on: color stays (0,0,0) — daemon uses random hues */
-        config.brightness = brightness;
-        config.speed = speed;
-
-        if (meta->flags & F87_PARAM_AUDIO) {
-            guint src_idx = ctrl->source_dropdown ?
-                            gtk_drop_down_get_selected(ctrl->source_dropdown) : 0;
-            config.audio_source = (f87_audio_source_t)src_idx;
-
-            if (ctrl->auto_gain_switch && gtk_switch_get_active(ctrl->auto_gain_switch))
-                config.gain = 0;
-            else if (ctrl->gain_scale)
-                config.gain = (float)gtk_range_get_value(GTK_RANGE(ctrl->gain_scale));
-        }
-
-        if (meta->flags & F87_PARAM_PROFILE) {
-            if (ctrl->sensor_profile_dropdown) {
-                guint idx = gtk_drop_down_get_selected(ctrl->sensor_profile_dropdown);
-                const char *profiles[] = {"developer", "gamer", "system"};
-                if (idx < 3)
-                    config.sensor_profile = profiles[idx];
-            }
-        }
-
-        rc = f87_app_state_start_sw(ctrl->state, ctrl->effect_id, &config);
+        rc = send_sw_effect(ctrl);
+        if (rc == 0)
+            ctrl->sw_running = TRUE;
     }
 
     update_status(ctrl, ctrl->state->status_text);
 
     if (rc == 0) {
-        gtk_button_set_label(ctrl->send_button, _("Saving..."));
         gtk_widget_set_sensitive(GTK_WIDGET(ctrl->send_button), FALSE);
         gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "loading");
 
@@ -544,13 +592,9 @@ static void on_send_clicked(GtkButton *btn, gpointer data)
 static void do_stop(F87Controls *ctrl)
 {
     f87_app_state_stop(ctrl->state);
+    ctrl->sw_running = FALSE;
     update_status(ctrl, ctrl->state->status_text);
-}
-
-static void on_stop_clicked(GtkButton *btn, gpointer data)
-{
-    (void)btn;
-    do_stop((F87Controls *)data);
+    update_button_state(ctrl);
 }
 
 /* ===== CLEAR + BUILD ===== */
@@ -739,6 +783,8 @@ static void build_controls_for_effect(F87Controls *ctrl)
 void f87_controls_set_effect(F87Controls *ctrl, const char *category,
                               const char *effect_name, int effect_id)
 {
+    gboolean was_direct = is_direct_mode_effect(ctrl) && ctrl->sw_running;
+
     strncpy(ctrl->category, category, sizeof(ctrl->category) - 1);
     strncpy(ctrl->effect_name, effect_name, sizeof(ctrl->effect_name) - 1);
     ctrl->effect_id = effect_id;
@@ -749,13 +795,22 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
     clear_params(ctrl);
     build_controls_for_effect(ctrl);
 
-    if (ctrl->stop_button) {
-        gboolean show_stop = strcmp(category, "hw") != 0;
-        gtk_widget_set_visible(GTK_WIDGET(ctrl->stop_button), show_stop);
+    /* If direct mode was running and new effect is also direct-mode,
+     * auto-apply immediately (hot-switch without stopping) */
+    if (was_direct && is_direct_mode_effect(ctrl)) {
+        int rc = send_sw_effect(ctrl);
+        if (rc == 0) {
+            ctrl->sw_running = TRUE;
+            update_status(ctrl, ctrl->state->status_text);
+        }
+    } else if (was_direct && !is_direct_mode_effect(ctrl)) {
+        /* Switching from SW to HW — stop direct mode */
+        f87_app_state_stop(ctrl->state);
+        ctrl->sw_running = FALSE;
     }
 
-    gtk_button_set_label(ctrl->send_button, _("Save"));
     gtk_widget_set_sensitive(GTK_WIDGET(ctrl->send_button), TRUE);
+    update_button_state(ctrl);
 
     /* Start preview (not for paint mode) */
     if (ctrl->preview) {
@@ -839,10 +894,7 @@ F87Controls *f87_controls_new(f87_app_state_t *state,
     g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
     gtk_box_append(btn_box, GTK_WIDGET(ctrl->send_button));
 
-    ctrl->stop_button = GTK_BUTTON(gtk_button_new_with_label(_("Stop")));
-    gtk_widget_add_css_class(GTK_WIDGET(ctrl->stop_button), "stop-button");
-    g_signal_connect(ctrl->stop_button, "clicked", G_CALLBACK(on_stop_clicked), ctrl);
-    gtk_box_append(btn_box, GTK_WIDGET(ctrl->stop_button));
+    /* Stop button removed — send button toggles Start/Stop for SW effects */
 
     gtk_box_append(ctrl->container, GTK_WIDGET(btn_box));
 

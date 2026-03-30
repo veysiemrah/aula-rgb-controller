@@ -57,17 +57,26 @@ int f87d_effmgr_set_sw(f87d_effect_manager_t *mgr, f87_device *dev,
 {
     if (!dev) return -1;
 
-    stop_anim(mgr);
+    /* Hot-switch: if animation is already running, change effect without
+     * stopping direct mode. This avoids a brief LED reset between effects. */
+    if (mgr->anim && f87_anim_is_running(mgr->anim) &&
+        (mgr->category == F87D_CAT_SW || mgr->category == F87D_CAT_MUSIC ||
+         mgr->category == F87D_CAT_SENSOR)) {
+        f87_anim_set_effect(mgr->anim, (f87_sw_effect_id)effect_id);
+        f87_anim_set_color(mgr->anim, r, g, b);
+    } else {
+        stop_anim(mgr);
 
-    f87_anim_config_t config = {
-        .color = {r, g, b},
-        .brightness = brightness,
-        .speed = speed,
-        .fps = fps,
-    };
+        f87_anim_config_t config = {
+            .color = {r, g, b},
+            .brightness = brightness,
+            .speed = speed,
+            .fps = fps,
+        };
 
-    mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
-    if (!mgr->anim) return -1;
+        mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+        if (!mgr->anim) return -1;
+    }
 
     mgr->category = F87D_CAT_SW;
     mgr->effect_id = effect_id;
@@ -85,18 +94,26 @@ int f87d_effmgr_set_music(f87d_effect_manager_t *mgr, f87_device *dev,
 {
     if (!dev) return -1;
 
-    stop_anim(mgr);
+    /* Hot-switch if animation already running */
+    if (mgr->anim && f87_anim_is_running(mgr->anim) &&
+        (mgr->category == F87D_CAT_SW || mgr->category == F87D_CAT_MUSIC ||
+         mgr->category == F87D_CAT_SENSOR)) {
+        f87_anim_set_effect(mgr->anim, (f87_sw_effect_id)effect_id);
+        f87_anim_set_color(mgr->anim, r, g, b);
+    } else {
+        stop_anim(mgr);
 
-    f87_anim_config_t config = {
-        .color = {r, g, b},
-        .brightness = brightness,
-        .speed = 2,
-        .audio_source = F87_AUDIO_MONITOR,
-        .gain = (float)gain,
-    };
+        f87_anim_config_t config = {
+            .color = {r, g, b},
+            .brightness = brightness,
+            .speed = 2,
+            .audio_source = F87_AUDIO_MONITOR,
+            .gain = (float)gain,
+        };
 
-    mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
-    if (!mgr->anim) return -1;
+        mgr->anim = f87_anim_start(dev, (f87_sw_effect_id)effect_id, &config);
+        if (!mgr->anim) return -1;
+    }
 
     mgr->category = F87D_CAT_MUSIC;
     mgr->effect_id = effect_id;
@@ -113,6 +130,7 @@ int f87d_effmgr_set_sensor(f87d_effect_manager_t *mgr, f87_device *dev,
 {
     if (!dev) return -1;
 
+    /* Sensor always needs fresh start (different config structure) */
     stop_anim(mgr);
 
     f87_anim_config_t config = {
