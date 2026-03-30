@@ -13,9 +13,10 @@ void f87_preview_destroy(f87_preview_t *prev);
 void f87_preview_start(f87_preview_t *prev, int effect_id, const char *category,
                         uint8_t speed, uint8_t r, uint8_t g, uint8_t b);
 
-/* Update speed/color while running */
+/* Update speed/color/colorful while running */
 void f87_preview_set_speed(f87_preview_t *prev, uint8_t speed);
 void f87_preview_set_color(f87_preview_t *prev, uint8_t r, uint8_t g, uint8_t b);
+void f87_preview_set_colorful(f87_preview_t *prev, int colorful);
 
 /* Stop preview */
 void f87_preview_stop(f87_preview_t *prev);

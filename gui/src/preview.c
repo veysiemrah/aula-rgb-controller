@@ -21,6 +21,7 @@ struct f87_preview {
     char category[16];
     uint8_t speed;
     uint8_t color[3];
+    int colorful;
     uint32_t rng;
     uint8_t buf[KEY_COUNT][3];
     void *state; /* effect-specific state */
@@ -420,6 +421,7 @@ static void render_spectrum_hw(f87_preview_t *p)
     memset(p->buf, 0, sizeof(p->buf));
     for (int k = 0; k < KEY_COUNT; k++) {
         float max_v = 0;
+        float best_hue = 0;
         for (int e = 0; e < REACTIVE_MAX; e++) {
             if (s->items[e].strength <= 0) continue;
             int src = s->items[e].key_id;
@@ -427,13 +429,19 @@ static void render_spectrum_hw(f87_preview_t *p)
             float dx = fabsf((float)(f87_key_layout[k].col - f87_key_layout[src].col));
             if (dx <= s->items[e].radius) {
                 float v = (1.0f - dx / (s->items[e].radius + 1.0f)) * s->items[e].strength;
-                if (v > max_v) max_v = v;
+                if (v > max_v) { max_v = v; best_hue = s->items[e].hue; }
             }
         }
         if (max_v > 0) {
-            p->buf[k][0] = (uint8_t)(p->color[0] * max_v);
-            p->buf[k][1] = (uint8_t)(p->color[1] * max_v);
-            p->buf[k][2] = (uint8_t)(p->color[2] * max_v);
+            if (p->colorful) {
+                uint8_t cr, cg, cb;
+                hsv(best_hue, 1.0f, max_v, &cr, &cg, &cb);
+                p->buf[k][0] = cr; p->buf[k][1] = cg; p->buf[k][2] = cb;
+            } else {
+                p->buf[k][0] = (uint8_t)(p->color[0] * max_v);
+                p->buf[k][1] = (uint8_t)(p->color[1] * max_v);
+                p->buf[k][2] = (uint8_t)(p->color[2] * max_v);
+            }
         }
     }
 }
@@ -738,6 +746,11 @@ void f87_preview_set_speed(f87_preview_t *prev, uint8_t speed) { prev->speed = s
 void f87_preview_set_color(f87_preview_t *prev, uint8_t r, uint8_t g, uint8_t b)
 {
     prev->color[0] = r; prev->color[1] = g; prev->color[2] = b;
+}
+
+void f87_preview_set_colorful(f87_preview_t *prev, int colorful)
+{
+    prev->colorful = colorful;
 }
 
 void f87_preview_stop(f87_preview_t *prev)

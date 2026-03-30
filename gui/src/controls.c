@@ -294,6 +294,14 @@ static void on_speed_changed(GtkRange *range, gpointer data)
         f87_preview_set_speed(ctrl->preview, (uint8_t)gtk_range_get_value(range));
 }
 
+static void on_colorful_changed(GtkSwitch *sw, GParamSpec *pspec, gpointer data)
+{
+    (void)pspec;
+    F87Controls *ctrl = data;
+    if (ctrl->preview)
+        f87_preview_set_colorful(ctrl->preview, gtk_switch_get_active(sw));
+}
+
 /* ===== PAINT CALLBACKS ===== */
 
 static void on_key_painted(int key_id, gpointer user_data)
@@ -627,6 +635,7 @@ static void build_controls_for_effect(F87Controls *ctrl)
         gtk_box_append(cf_box, GTK_WIDGET(cf_label));
         ctrl->colorful_switch = GTK_SWITCH(gtk_switch_new());
         gtk_widget_set_margin_start(GTK_WIDGET(ctrl->colorful_switch), 4);
+        g_signal_connect(ctrl->colorful_switch, "notify::active", G_CALLBACK(on_colorful_changed), ctrl);
         gtk_box_append(cf_box, GTK_WIDGET(ctrl->colorful_switch));
         GtkLabel *cf_hint = GTK_LABEL(gtk_label_new(_("mixed colors")));
         gtk_widget_set_opacity(GTK_WIDGET(cf_hint), 0.35);
