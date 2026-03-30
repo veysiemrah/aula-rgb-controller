@@ -320,6 +320,28 @@ static void on_speed_changed(GtkRange *range, gpointer data)
         send_sw_effect(ctrl);
 }
 
+static void on_gain_changed(GtkRange *range, gpointer data)
+{
+    (void)range;
+    F87Controls *ctrl = data;
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
+}
+
+static void on_auto_gain_changed(GtkSwitch *sw, GParamSpec *pspec, gpointer data)
+{
+    (void)pspec;
+    F87Controls *ctrl = data;
+
+    /* Toggle gain slider visibility */
+    GtkWidget *gain_slider = g_object_get_data(G_OBJECT(sw), "gain-slider");
+    if (gain_slider)
+        gtk_widget_set_visible(gain_slider, !gtk_switch_get_active(sw));
+
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
+        send_sw_effect(ctrl);
+}
+
 static void on_colorful_changed(GtkSwitch *sw, GParamSpec *pspec, gpointer data)
 {
     (void)pspec;
@@ -749,10 +771,16 @@ static void build_controls_for_effect(F87Controls *ctrl)
         gtk_box_append(gain_box, GTK_WIDGET(gain_label));
         ctrl->auto_gain_switch = GTK_SWITCH(gtk_switch_new());
         gtk_switch_set_active(ctrl->auto_gain_switch, TRUE);
+        g_signal_connect(ctrl->auto_gain_switch, "notify::active", G_CALLBACK(on_auto_gain_changed), ctrl);
         gtk_box_append(gain_box, GTK_WIDGET(ctrl->auto_gain_switch));
         gtk_box_append(left, GTK_WIDGET(gain_box));
 
-        gtk_box_append(left, create_slider(_("Gain"), 1, 10, 3, 1, &ctrl->gain_scale));
+        GtkWidget *gain_slider = create_slider(_("Gain"), 1, 10, 3, 1, &ctrl->gain_scale);
+        g_signal_connect(ctrl->gain_scale, "value-changed", G_CALLBACK(on_gain_changed), ctrl);
+        /* Hide gain slider when auto gain is active */
+        gtk_widget_set_visible(gain_slider, FALSE);
+        g_object_set_data(G_OBJECT(ctrl->auto_gain_switch), "gain-slider", gain_slider);
+        gtk_box_append(left, gain_slider);
     }
 
     if (flags & F87_PARAM_PROFILE) {
