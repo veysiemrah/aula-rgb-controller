@@ -563,6 +563,29 @@ static void render_ripple_hw(f87_preview_t *p)
     }
 }
 
+static void render_aurora(f87_preview_t *p)
+{
+    float t = (float)p->frame * speed_mult(p->speed) * 0.06f;
+    for (int k = 0; k < KEY_COUNT; k++) {
+        float x = (float)f87_key_layout[k].col / 17.0f;
+        float y = (float)f87_key_layout[k].row / 6.0f;
+
+        float v1 = sinf(x * 4.0f + t * 1.2f);
+        float v2 = sinf(y * 3.0f + t * 0.8f);
+        float v3 = sinf((x + y) * 2.5f + t * 1.5f);
+        float v = (v1 + v2 + v3 + 3.0f) / 6.0f;
+
+        if (p->colorful) {
+            float hue = fmodf(x * 120.0f + t * 20.0f, 360.0f);
+            hsv(hue, 0.8f, v, &p->buf[k][0], &p->buf[k][1], &p->buf[k][2]);
+        } else {
+            p->buf[k][0] = (uint8_t)(p->color[0] * v);
+            p->buf[k][1] = (uint8_t)(p->color[1] * v);
+            p->buf[k][2] = (uint8_t)(p->color[2] * v);
+        }
+    }
+}
+
 static void render_explode(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
@@ -787,7 +810,7 @@ static void render_frame(f87_preview_t *p)
     case 7:  render_ripple_hw(p); break;
     case 8:  render_starlight(p); break;
     case 10: render_snake(p); break;
-    case 11: render_plasma(p); break;
+    case 11: render_aurora(p); break;
     case 12: render_typewriter(p); break; /* HW reactive ~ typewriter glow */
     case 13: render_marquee(p); break;
     case 15: render_circle(p); break;
