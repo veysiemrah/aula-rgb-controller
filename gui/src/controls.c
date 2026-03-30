@@ -592,6 +592,15 @@ static void build_controls_for_effect(F87Controls *ctrl)
     }
     gtk_box_append(ctrl->params_box, GTK_WIDGET(title_row));
 
+    /* Effect description */
+    if (meta->desc) {
+        GtkLabel *desc_label = GTK_LABEL(gtk_label_new(_(meta->desc)));
+        gtk_label_set_xalign(desc_label, 0);
+        gtk_widget_set_opacity(GTK_WIDGET(desc_label), 0.45);
+        gtk_widget_add_css_class(GTK_WIDGET(desc_label), "caption");
+        gtk_box_append(ctrl->params_box, GTK_WIDGET(desc_label));
+    }
+
     /* No params for Off */
     if (flags == 0) return;
 

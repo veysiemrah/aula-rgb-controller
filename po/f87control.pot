@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: f87control\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-30 18:15+0300\n"
+"POT-Creation-Date: 2026-03-30 18:17+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -67,7 +67,7 @@ msgstr ""
 msgid "Custom running"
 msgstr ""
 
-#: gui/src/controls.c:448 gui/src/controls.c:729 gui/src/controls.c:805
+#: gui/src/controls.c:448 gui/src/controls.c:738 gui/src/controls.c:814
 msgid "Save"
 msgstr ""
 
@@ -79,212 +79,220 @@ msgstr ""
 msgid "Click keyboard to preview"
 msgstr ""
 
-#: gui/src/controls.c:606
+#: gui/src/controls.c:615
 msgid "Brightness"
 msgstr ""
 
-#: gui/src/controls.c:609
+#: gui/src/controls.c:618
 msgid "Speed"
 msgstr ""
 
-#: gui/src/controls.c:615
+#: gui/src/controls.c:624
 msgid "Colorful mode"
 msgstr ""
 
-#: gui/src/controls.c:622
+#: gui/src/controls.c:631
 msgid "mixed colors"
 msgstr ""
 
-#: gui/src/controls.c:631
+#: gui/src/controls.c:640
 msgid "Source"
 msgstr ""
 
-#: gui/src/controls.c:636
+#: gui/src/controls.c:645
 msgid "System Audio"
 msgstr ""
 
-#: gui/src/controls.c:636
+#: gui/src/controls.c:645
 msgid "Microphone"
 msgstr ""
 
-#: gui/src/controls.c:642
+#: gui/src/controls.c:651
 msgid "Auto Gain"
 msgstr ""
 
-#: gui/src/controls.c:651
+#: gui/src/controls.c:660
 msgid "Gain"
 msgstr ""
 
-#: gui/src/controls.c:656
+#: gui/src/controls.c:665
 msgid "Profile"
 msgstr ""
 
-#: gui/src/controls.c:668
+#: gui/src/controls.c:677
 msgid "Select color, paint by clicking keys"
 msgstr ""
 
-#: gui/src/controls.c:675
+#: gui/src/controls.c:684
 msgid "Fill All"
 msgstr ""
 
-#: gui/src/controls.c:677
+#: gui/src/controls.c:686
 msgid "Clear"
 msgstr ""
 
-#: gui/src/controls.c:795
+#: gui/src/controls.c:804
 msgid "Select effect"
 msgstr ""
 
-#: gui/src/controls.c:811
+#: gui/src/controls.c:820
 msgid "Stop"
 msgstr ""
 
-#: gui/src/sidebar.c:76
+#. HW effects
+#: gui/src/effect_meta.c:15 gui/src/sidebar.c:76
 msgid "Turn off all LEDs"
 msgstr ""
 
-#: gui/src/sidebar.c:77
+#: gui/src/effect_meta.c:16 gui/src/sidebar.c:77
 msgid "Single solid color"
 msgstr ""
 
-#: gui/src/sidebar.c:78
+#: gui/src/effect_meta.c:17 gui/src/sidebar.c:78
 msgid "Pulsing color fade"
 msgstr ""
 
-#: gui/src/sidebar.c:79
+#: gui/src/effect_meta.c:18 gui/src/sidebar.c:79
 msgid "Rainbow wave across keyboard"
 msgstr ""
 
-#: gui/src/sidebar.c:80
+#: gui/src/effect_meta.c:19 gui/src/sidebar.c:80
 msgid "Color spread from key presses"
 msgstr ""
 
-#: gui/src/sidebar.c:81
+#: gui/src/effect_meta.c:20 gui/src/sidebar.c:81
 msgid "Falling rain drops"
 msgstr ""
 
-#: gui/src/sidebar.c:82
+#: gui/src/effect_meta.c:21 gui/src/sidebar.c:82
 msgid "Ripple waves from key presses"
 msgstr ""
 
-#: gui/src/sidebar.c:83
+#: gui/src/effect_meta.c:22 gui/src/sidebar.c:83
 msgid "Random twinkling stars"
 msgstr ""
 
-#: gui/src/sidebar.c:84
+#: gui/src/effect_meta.c:23 gui/src/sidebar.c:84
 msgid "Snake trail moving across keys"
 msgstr ""
 
-#: gui/src/sidebar.c:85
+#: gui/src/effect_meta.c:24 gui/src/sidebar.c:85
 msgid "Northern lights shimmer"
 msgstr ""
 
-#: gui/src/sidebar.c:86
+#: gui/src/effect_meta.c:25 gui/src/sidebar.c:86
 msgid "Single key lights up on press"
 msgstr ""
 
-#: gui/src/sidebar.c:87
+#: gui/src/effect_meta.c:26 gui/src/sidebar.c:87
 msgid "Scrolling light marquee"
 msgstr ""
 
-#: gui/src/sidebar.c:88
+#: gui/src/effect_meta.c:27 gui/src/sidebar.c:88
 msgid "Circular rainbow pattern"
 msgstr ""
 
-#: gui/src/sidebar.c:89
+#: gui/src/effect_meta.c:28 gui/src/sidebar.c:89
 msgid "Top to bottom wave"
 msgstr ""
 
-#: gui/src/sidebar.c:90
+#: gui/src/effect_meta.c:29 gui/src/sidebar.c:90
 msgid "Ripple from center outward"
 msgstr ""
 
-#: gui/src/sidebar.c:91
+#: gui/src/effect_meta.c:30 gui/src/sidebar.c:91
 msgid "Paint each key individually"
+msgstr ""
+
+#. SW effects
+#: gui/src/effect_meta.c:33 gui/src/sidebar.c:97
+msgid "Doom fire algorithm"
+msgstr ""
+
+#: gui/src/effect_meta.c:34 gui/src/sidebar.c:98
+msgid "Matrix digital rain"
+msgstr ""
+
+#: gui/src/effect_meta.c:35 gui/src/sidebar.c:99
+msgid "Colorful plasma waves"
+msgstr ""
+
+#: gui/src/effect_meta.c:36
+msgid "CPU temperature heatmap"
+msgstr ""
+
+#: gui/src/effect_meta.c:37 gui/src/sidebar.c:100
+msgid "Rotating radar sweep"
+msgstr ""
+
+#: gui/src/effect_meta.c:38 gui/src/sidebar.c:101
+msgid "Random lightning bolts"
+msgstr ""
+
+#: gui/src/effect_meta.c:39 gui/src/sidebar.c:102
+msgid "Colorful explosions on key press"
+msgstr ""
+
+#: gui/src/effect_meta.c:40 gui/src/sidebar.c:103
+msgid "Software ripple waves on key press"
+msgstr ""
+
+#: gui/src/effect_meta.c:41 gui/src/sidebar.c:104
+msgid "Heat trail on key press"
+msgstr ""
+
+#: gui/src/effect_meta.c:42 gui/src/sidebar.c:105
+msgid "Conway's Game of Life on key press"
+msgstr ""
+
+#: gui/src/effect_meta.c:43 gui/src/sidebar.c:106
+msgid "Cumulative key usage heatmap"
+msgstr ""
+
+#. Music effects
+#: gui/src/effect_meta.c:46 gui/src/sidebar.c:112
+msgid "Audio spectrum analyzer bars"
+msgstr ""
+
+#: gui/src/effect_meta.c:47 gui/src/sidebar.c:113
+msgid "Flash on beat detection"
+msgstr ""
+
+#: gui/src/effect_meta.c:48 gui/src/sidebar.c:114
+msgid "Expanding energy waves from audio"
+msgstr ""
+
+#: gui/src/effect_meta.c:49 gui/src/sidebar.c:115
+msgid "Classic VU meter display"
+msgstr ""
+
+#: gui/src/effect_meta.c:50 gui/src/sidebar.c:116
+msgid "Frequency band mapping"
+msgstr ""
+
+#. Sensor
+#: gui/src/effect_meta.c:53 gui/src/sidebar.c:122
+msgid "Developer sensor profile"
+msgstr ""
+
+#: gui/src/effect_meta.c:54 gui/src/sidebar.c:123
+msgid "Gamer sensor profile"
+msgstr ""
+
+#: gui/src/effect_meta.c:55 gui/src/sidebar.c:124
+msgid "System monitor profile"
 msgstr ""
 
 #: gui/src/sidebar.c:94
 msgid "Hardware Effects"
 msgstr ""
 
-#: gui/src/sidebar.c:97
-msgid "Doom fire algorithm"
-msgstr ""
-
-#: gui/src/sidebar.c:98
-msgid "Matrix digital rain"
-msgstr ""
-
-#: gui/src/sidebar.c:99
-msgid "Colorful plasma waves"
-msgstr ""
-
-#: gui/src/sidebar.c:100
-msgid "Rotating radar sweep"
-msgstr ""
-
-#: gui/src/sidebar.c:101
-msgid "Random lightning bolts"
-msgstr ""
-
-#: gui/src/sidebar.c:102
-msgid "Colorful explosions on key press"
-msgstr ""
-
-#: gui/src/sidebar.c:103
-msgid "Software ripple waves on key press"
-msgstr ""
-
-#: gui/src/sidebar.c:104
-msgid "Heat trail on key press"
-msgstr ""
-
-#: gui/src/sidebar.c:105
-msgid "Conway's Game of Life on key press"
-msgstr ""
-
-#: gui/src/sidebar.c:106
-msgid "Cumulative key usage heatmap"
-msgstr ""
-
 #: gui/src/sidebar.c:109
 msgid "Software Effects"
 msgstr ""
 
-#: gui/src/sidebar.c:112
-msgid "Audio spectrum analyzer bars"
-msgstr ""
-
-#: gui/src/sidebar.c:113
-msgid "Flash on beat detection"
-msgstr ""
-
-#: gui/src/sidebar.c:114
-msgid "Expanding energy waves from audio"
-msgstr ""
-
-#: gui/src/sidebar.c:115
-msgid "Classic VU meter display"
-msgstr ""
-
-#: gui/src/sidebar.c:116
-msgid "Frequency band mapping"
-msgstr ""
-
 #: gui/src/sidebar.c:119
 msgid "Music"
-msgstr ""
-
-#: gui/src/sidebar.c:122
-msgid "Developer sensor profile"
-msgstr ""
-
-#: gui/src/sidebar.c:123
-msgid "Gamer sensor profile"
-msgstr ""
-
-#: gui/src/sidebar.c:124
-msgid "System monitor profile"
 msgstr ""
 
 #: gui/src/sidebar.c:136

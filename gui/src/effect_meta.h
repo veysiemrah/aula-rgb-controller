@@ -16,7 +16,8 @@ typedef enum {
 typedef struct {
     int effect_id;
     uint32_t flags;
-    const char *tag;  /* "rainbow", NULL, etc. — not translated */
+    const char *tag;   /* "rainbow", NULL, etc. — not translated */
+    const char *desc;  /* N_() marked description — translated at display time */
 } effect_meta_t;
 
 /* Returns metadata for given effect_id. Never returns NULL — unknown IDs
