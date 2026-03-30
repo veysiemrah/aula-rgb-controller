@@ -27,4 +27,7 @@ void f87_preview_on_key(f87_preview_t *prev, int key_id);
 /* Check if effect is reactive (needs keypress input) */
 int f87_preview_is_reactive(int effect_id);
 
+/* Load sensor profile for preview — sets up groups/colors for render_sensor */
+void f87_preview_set_sensor_profile(f87_preview_t *prev, const char *profile_name);
+
 #endif
