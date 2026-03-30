@@ -4,8 +4,7 @@
 #include <string.h>
 #include <unistd.h>  /* usleep */
 
-/* Small delay between USB transfers to let the device process */
-#define F87_CMD_DELAY_US  5000  /* 5ms */
+/* F87_CMD_DELAY_US defined in protocol.h */
 
 void f87_pkt_init(f87_packet *pkt)
 {

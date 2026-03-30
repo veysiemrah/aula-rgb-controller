@@ -185,18 +185,27 @@ static void *anim_thread_func(void *arg)
         }
 
         rc = f87_direct_send_frame(ctx->dev, colors, f87_led_index, F87_KEY_COUNT);
+
+        /* Mandatory post-transfer delay — prevents USB overload */
+        usleep(F87_CMD_DELAY_US);
+
         if (rc < 0) {
-            /* USB transient errors: retry a few times before giving up */
-            int retries = 3;
+            /* USB transient errors: exponential backoff before giving up */
+            int retries = 5;
+            useconds_t backoff = 10000;  /* 10ms, 20ms, 40ms, 80ms, 160ms */
             while (rc < 0 && retries-- > 0) {
-                usleep(5000);
+                usleep(backoff);
                 rc = f87_direct_send_frame(ctx->dev, colors, f87_led_index, F87_KEY_COUNT);
+                usleep(F87_CMD_DELAY_US);
+                backoff *= 2;
             }
             if (rc < 0) {
+                F87_WARN(F87_SRC_EFFECT, "animation USB error after retries, stopping");
                 atomic_store(&ctx->error, F87_ERR_IO);
                 atomic_store(&ctx->running, false);
                 break;
             }
+            F87_DEBUG(F87_SRC_EFFECT, "animation recovered after USB transient error");
         }
 
         /* Sleep to maintain target frame rate */
@@ -205,17 +214,17 @@ static void *anim_thread_func(void *arg)
         if (elapsed < target_us)
             usleep((useconds_t)(target_us - elapsed));
 
-        /* FPS counter (prints every 3 seconds) */
+        /* FPS counter (logs every 3 seconds) */
         if (ctx->effect_ctx.frame_count % 90 == 0 && ctx->effect_ctx.frame_count > 0) {
             uint64_t total = f87_time_us() - ctx->effect_ctx.start_time_us;
             float fps = (float)ctx->effect_ctx.frame_count / ((float)total / 1000000.0f);
-            fprintf(stderr, "f87: %.1f fps (%lu frames)\n", fps, (unsigned long)ctx->effect_ctx.frame_count);
+            F87_DEBUG(F87_SRC_EFFECT, "%.1f fps (%lu frames)", fps, (unsigned long)ctx->effect_ctx.frame_count);
         }
     }
 
-    /* Only disable direct mode if we exited cleanly (not IO error) */
-    if (atomic_load(&ctx->error) == 0)
-        f87_direct_mode_disable(ctx->dev);
+    /* Always try to disable direct mode — even after error.
+     * On error the keyboard may have reset, so failure here is OK. */
+    f87_direct_mode_disable(ctx->dev);
     return NULL;
 }
 

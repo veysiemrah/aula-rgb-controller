@@ -186,4 +186,7 @@ extern const f87_key_info f87_key_layout[F87_KEY_COUNT];
 /* LED index mapping: key_id -> hardware LED address (from KB.ini RE) */
 extern const uint8_t f87_led_index[F87_KEY_COUNT];
 
+/* Delay between USB transfers to let the device process (microseconds) */
+#define F87_CMD_DELAY_US  5000  /* 5ms */
+
 #endif /* F87_PROTOCOL_H */
