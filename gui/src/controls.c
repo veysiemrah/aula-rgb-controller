@@ -1,6 +1,7 @@
 #include "controls.h"
 #include "effect_meta.h"
 #include "preview.h"
+#include "sensor_editor.h"
 #include "i18n.h"
 #include <string.h>
 #include <stdio.h>
@@ -59,6 +60,7 @@ struct _F87Controls {
 
     F87KeyboardView *keyboard;
     f87_preview_t *preview;
+    F87SensorEditor *sensor_editor;
 };
 
 static void update_status(F87Controls *ctrl, const char *text)
@@ -568,21 +570,19 @@ static int send_sw_effect(F87Controls *ctrl)
             config.gain = (float)gtk_range_get_value(GTK_RANGE(ctrl->gain_scale));
     }
 
-    if (meta->flags & F87_PARAM_PROFILE) {
-        if (ctrl->sensor_profile_dropdown) {
-            guint idx = gtk_drop_down_get_selected(ctrl->sensor_profile_dropdown);
-            const char *profiles[] = {"developer", "gamer", "system"};
-            if (idx < 3)
-                config.sensor_profile = profiles[idx];
-        } else {
-            /* Fallback: use effect name as profile (sidebar passes it) */
-            config.sensor_profile = ctrl->effect_name;
+    if (meta->flags & F87_PARAM_SENSOR) {
+        if (ctrl->sensor_editor) {
+            const char *path = NULL;
+            config.sensor_profile = f87_sensor_editor_get_profile(
+                ctrl->sensor_editor, &path);
+            config.sensor_config_path = path;
+            config.brightness = f87_sensor_editor_get_brightness(ctrl->sensor_editor);
         }
     }
 
-    /* Sensor effects all use F87_SW_SENSOR (106), profile distinguishes them */
+    /* Sensor effects all use F87_SW_SENSOR (106) */
     int eid = ctrl->effect_id;
-    if (meta->flags & F87_PARAM_PROFILE)
+    if (meta->flags & F87_PARAM_SENSOR)
         eid = F87_SW_SENSOR;
 
     return f87_app_state_start_sw(ctrl->state, eid, &config);
@@ -673,6 +673,13 @@ static void clear_params(F87Controls *ctrl)
     ctrl->colorful_switch = NULL;
     ctrl->source_dropdown = NULL;
     ctrl->sensor_profile_dropdown = NULL;
+
+    if (ctrl->sensor_editor) {
+        f87_sensor_editor_deactivate(ctrl->sensor_editor);
+        f87_sensor_editor_destroy(ctrl->sensor_editor);
+        ctrl->sensor_editor = NULL;
+    }
+
     ctrl->sv_area = NULL;
     ctrl->hue_scale = NULL;
     ctrl->hex_entry = NULL;
@@ -725,6 +732,24 @@ static void build_controls_for_effect(F87Controls *ctrl)
 
     /* No params for Off */
     if (flags == 0) return;
+
+    /* Sensor monitor — uses its own editor widget */
+    if (flags & F87_PARAM_SENSOR) {
+        ctrl->sensor_editor = f87_sensor_editor_new(ctrl->keyboard, ctrl->state);
+        gtk_box_append(ctrl->params_box,
+                       f87_sensor_editor_get_widget(ctrl->sensor_editor));
+        f87_sensor_editor_activate(ctrl->sensor_editor);
+
+        ctrl->send_button = GTK_BUTTON(gtk_button_new_with_label(_("Start")));
+        gtk_widget_add_css_class(GTK_WIDGET(ctrl->send_button), "action-button");
+        g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
+        gtk_box_append(ctrl->params_box, GTK_WIDGET(ctrl->send_button));
+
+        if (ctrl->preview)
+            f87_preview_start(ctrl->preview, ctrl->effect_id, ctrl->category,
+                              2, 0, 0, 0);
+        return;
+    }
 
     /* Split layout: left params | divider | right color picker */
     GtkBox *split = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8));
