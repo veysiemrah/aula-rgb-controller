@@ -161,7 +161,12 @@ static void render_rain(f87_preview_t *p)
     int d = 1 + p->speed / 2;
     for (int i = 0; i < d; i++) {
         int idx = (int)(rng_next(&p->rng) % KEY_COUNT);
-        memcpy(p->buf[idx], p->color, 3);
+        if (p->colorful) {
+            float hue = (float)(rng_next(&p->rng) % 360);
+            hsv(hue, 1.0f, 1.0f, &p->buf[idx][0], &p->buf[idx][1], &p->buf[idx][2]);
+        } else {
+            memcpy(p->buf[idx], p->color, 3);
+        }
     }
 }
 
