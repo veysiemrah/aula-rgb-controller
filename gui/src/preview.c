@@ -175,17 +175,71 @@ static void render_rain(f87_preview_t *p)
     }
 }
 
+/* Build S-shaped path: even rows left→right, odd rows right→left */
+static int snake_path[KEY_COUNT];
+static int snake_path_len = 0;
+static int snake_path_built = 0;
+
+static void build_snake_path(void)
+{
+    if (snake_path_built) return;
+
+    /* Collect keys per row, sorted by column */
+    int row_keys[GRID_ROWS][24];
+    int row_count[GRID_ROWS] = {0};
+
+    for (int k = 0; k < KEY_COUNT; k++) {
+        int r = f87_key_layout[k].row;
+        if (r < GRID_ROWS)
+            row_keys[r][row_count[r]++] = k;
+    }
+
+    /* Sort each row by column */
+    for (int r = 0; r < GRID_ROWS; r++) {
+        for (int i = 0; i < row_count[r] - 1; i++)
+            for (int j = i + 1; j < row_count[r]; j++)
+                if (f87_key_layout[row_keys[r][i]].col > f87_key_layout[row_keys[r][j]].col) {
+                    int tmp = row_keys[r][i];
+                    row_keys[r][i] = row_keys[r][j];
+                    row_keys[r][j] = tmp;
+                }
+    }
+
+    /* Build S-path: even rows forward, odd rows reverse */
+    snake_path_len = 0;
+    for (int r = 0; r < GRID_ROWS; r++) {
+        if (r % 2 == 0) {
+            for (int i = 0; i < row_count[r]; i++)
+                snake_path[snake_path_len++] = row_keys[r][i];
+        } else {
+            for (int i = row_count[r] - 1; i >= 0; i--)
+                snake_path[snake_path_len++] = row_keys[r][i];
+        }
+    }
+    snake_path_built = 1;
+}
+
 static void render_snake(f87_preview_t *p)
 {
+    build_snake_path();
     memset(p->buf, 0, sizeof(p->buf));
-    int len = 6;
-    int head = (int)((float)p->frame * speed_mult(p->speed) * 0.5f) % KEY_COUNT;
+
+    int len = 8 + p->speed * 2;
+    int head = (int)((float)p->frame * speed_mult(p->speed) * 0.6f) % snake_path_len;
+
     for (int i = 0; i < len; i++) {
-        int idx = (head - i + KEY_COUNT) % KEY_COUNT;
+        int pos = (head - i + snake_path_len) % snake_path_len;
+        int idx = snake_path[pos];
         float br = 1.0f - (float)i / (float)len;
-        p->buf[idx][0] = (uint8_t)(p->color[0] * br);
-        p->buf[idx][1] = (uint8_t)(p->color[1] * br);
-        p->buf[idx][2] = (uint8_t)(p->color[2] * br);
+        if (p->colorful) {
+            float hue = fmodf((float)pos * (360.0f / snake_path_len) +
+                              (float)p->frame * 3.0f, 360.0f);
+            hsv(hue, 1.0f, br, &p->buf[idx][0], &p->buf[idx][1], &p->buf[idx][2]);
+        } else {
+            p->buf[idx][0] = (uint8_t)(p->color[0] * br);
+            p->buf[idx][1] = (uint8_t)(p->color[1] * br);
+            p->buf[idx][2] = (uint8_t)(p->color[2] * br);
+        }
     }
 }
 
