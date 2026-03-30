@@ -35,4 +35,8 @@ int f87_sensor_config_load(const char *path, f87_sensor_profile_t *profile,
 int f87_sensor_config_builtin(const char *name, f87_sensor_profile_t *profile,
                                const f87_key_info *layout, int key_count);
 
+/* Save profile to JSON file. Returns 0 on success, -1 on error. */
+int f87_sensor_config_save(const char *path, const f87_sensor_profile_t *profile,
+                            const f87_key_info *layout, int key_count);
+
 #endif /* F87_SENSOR_CONFIG_H */
