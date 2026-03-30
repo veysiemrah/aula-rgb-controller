@@ -574,10 +574,18 @@ static int send_sw_effect(F87Controls *ctrl)
             const char *profiles[] = {"developer", "gamer", "system"};
             if (idx < 3)
                 config.sensor_profile = profiles[idx];
+        } else {
+            /* Fallback: use effect name as profile (sidebar passes it) */
+            config.sensor_profile = ctrl->effect_name;
         }
     }
 
-    return f87_app_state_start_sw(ctrl->state, ctrl->effect_id, &config);
+    /* Sensor effects all use F87_SW_SENSOR (106), profile distinguishes them */
+    int eid = ctrl->effect_id;
+    if (meta->flags & F87_PARAM_PROFILE)
+        eid = F87_SW_SENSOR;
+
+    return f87_app_state_start_sw(ctrl->state, eid, &config);
 }
 
 static void do_send(F87Controls *ctrl)
