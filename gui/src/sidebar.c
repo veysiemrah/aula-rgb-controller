@@ -1,4 +1,5 @@
 #include "sidebar.h"
+#include "i18n.h"
 
 typedef struct {
     F87SidebarCallback callback;
@@ -8,6 +9,7 @@ typedef struct {
 typedef struct {
     const char *name;
     int id;
+    const char *tooltip;
 } EffectEntry;
 
 static void on_row_activated(GtkListBox *box, GtkListBoxRow *row, gpointer data)
@@ -24,7 +26,8 @@ static void on_row_activated(GtkListBox *box, GtkListBoxRow *row, gpointer data)
         sd->callback(category, name, id, sd->user_data);
 }
 
-static GtkListBoxRow *make_effect_row(const char *category, const char *name, int id)
+static GtkListBoxRow *make_effect_row(const char *category, const char *name,
+                                       int id, const char *tooltip)
 {
     GtkListBoxRow *row = GTK_LIST_BOX_ROW(gtk_list_box_row_new());
     GtkLabel *label = GTK_LABEL(gtk_label_new(name));
@@ -34,6 +37,9 @@ static GtkListBoxRow *make_effect_row(const char *category, const char *name, in
     g_object_set_data(G_OBJECT(row), "category", (gpointer)category);
     g_object_set_data(G_OBJECT(row), "effect-name", (gpointer)name);
     g_object_set_data(G_OBJECT(row), "effect-id", GINT_TO_POINTER(id));
+
+    if (tooltip)
+        gtk_widget_set_tooltip_text(GTK_WIDGET(row), _(tooltip));
 
     return row;
 }
@@ -47,7 +53,7 @@ static GtkWidget *make_expander_category(const char *title, const char *category
 
     for (int i = 0; entries[i].name; i++)
         gtk_list_box_append(list, GTK_WIDGET(
-            make_effect_row(category, entries[i].name, entries[i].id)));
+            make_effect_row(category, entries[i].name, entries[i].id, entries[i].tooltip)));
 
     GtkExpander *expander = GTK_EXPANDER(gtk_expander_new(title));
     gtk_expander_set_expanded(expander, FALSE);
@@ -66,48 +72,68 @@ GtkWidget *f87_sidebar_create(F87SidebarCallback callback, gpointer user_data)
     GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
     g_object_set_data_full(G_OBJECT(box), "sidebar-data", sd, g_free);
 
-    /* HW Effects */
     static const EffectEntry hw[] = {
-        {"Off", 0}, {"Static", 1}, {"Breathing", 2}, {"Wave", 3},
-        {"Spectrum", 4}, {"Rain", 5}, {"Ripple", 7}, {"Starlight", 8},
-        {"Snake", 10}, {"Aurora", 11}, {"Reactive", 12}, {"Marquee", 13},
-        {"Circle", 15}, {"Rain Down", 16}, {"Center Ripple", 17}, {"Custom", 18},
-        {NULL, 0}
+        {"Off",            0, N_("Turn off all LEDs")},
+        {"Static",         1, N_("Single solid color")},
+        {"Breathing",      2, N_("Pulsing color fade")},
+        {"Wave",           3, N_("Rainbow wave across keyboard")},
+        {"Spectrum",       4, N_("Color spread from key presses")},
+        {"Rain",           5, N_("Falling rain drops")},
+        {"Ripple",         7, N_("Ripple waves from key presses")},
+        {"Starlight",      8, N_("Random twinkling stars")},
+        {"Snake",         10, N_("Snake trail moving across keys")},
+        {"Aurora",        11, N_("Northern lights shimmer")},
+        {"Reactive",      12, N_("Single key lights up on press")},
+        {"Marquee",       13, N_("Scrolling light marquee")},
+        {"Circle",        15, N_("Circular rainbow pattern")},
+        {"Rain Down",     16, N_("Top to bottom wave")},
+        {"Center Ripple", 17, N_("Ripple from center outward")},
+        {"Custom",        18, N_("Paint each key individually")},
+        {NULL, 0, NULL}
     };
-    gtk_box_append(box, make_expander_category("Donanim Efektleri", "hw", hw, sd));
+    gtk_box_append(box, make_expander_category(_("Hardware Effects"), "hw", hw, sd));
 
-    /* SW Effects */
     static const EffectEntry sw[] = {
-        {"Fire", 100}, {"Matrix", 101}, {"Plasma", 102}, {"Radar", 104},
-        {"Lightning", 105}, {"Explode", 110}, {"Ripple SW", 111},
-        {"Typewriter", 112}, {"Life", 113}, {"KeyHeat", 114},
-        {NULL, 0}
+        {"Fire",       100, N_("Doom fire algorithm")},
+        {"Matrix",     101, N_("Matrix digital rain")},
+        {"Plasma",     102, N_("Colorful plasma waves")},
+        {"Radar",      104, N_("Rotating radar sweep")},
+        {"Lightning",  105, N_("Random lightning bolts")},
+        {"Explode",    110, N_("Colorful explosions on key press")},
+        {"Ripple SW",  111, N_("Software ripple waves on key press")},
+        {"Typewriter", 112, N_("Heat trail on key press")},
+        {"Life",       113, N_("Conway's Game of Life on key press")},
+        {"KeyHeat",    114, N_("Cumulative key usage heatmap")},
+        {NULL, 0, NULL}
     };
-    gtk_box_append(box, make_expander_category("Yazilimsal Efektler", "sw", sw, sd));
+    gtk_box_append(box, make_expander_category(_("Software Effects"), "sw", sw, sd));
 
-    /* Music */
     static const EffectEntry mu[] = {
-        {"Spectrum", 200}, {"Beat", 201}, {"Energy", 202},
-        {"VU Meter", 203}, {"FreqMap", 204},
-        {NULL, 0}
+        {"Spectrum", 200, N_("Audio spectrum analyzer bars")},
+        {"Beat",     201, N_("Flash on beat detection")},
+        {"Energy",   202, N_("Expanding energy waves from audio")},
+        {"VU Meter", 203, N_("Classic VU meter display")},
+        {"FreqMap",  204, N_("Frequency band mapping")},
+        {NULL, 0, NULL}
     };
-    gtk_box_append(box, make_expander_category("Muzik", "music", mu, sd));
+    gtk_box_append(box, make_expander_category(_("Music"), "music", mu, sd));
 
-    /* Sensor — special: rows carry sensor-profile data */
     static const EffectEntry se[] = {
-        {"developer", 106}, {"gamer", 107}, {"system", 108},
-        {NULL, 0}
+        {"developer", 106, N_("Developer sensor profile")},
+        {"gamer",     107, N_("Gamer sensor profile")},
+        {"system",    108, N_("System monitor profile")},
+        {NULL, 0, NULL}
     };
     GtkListBox *se_list = GTK_LIST_BOX(gtk_list_box_new());
     gtk_widget_add_css_class(GTK_WIDGET(se_list), "sidebar");
     g_signal_connect(se_list, "row-activated", G_CALLBACK(on_row_activated), sd);
     for (int i = 0; se[i].name; i++) {
-        GtkListBoxRow *row = make_effect_row("sensor", se[i].name, se[i].id);
+        GtkListBoxRow *row = make_effect_row("sensor", se[i].name, se[i].id, se[i].tooltip);
         g_object_set_data(G_OBJECT(row), "sensor-profile", (gpointer)se[i].name);
         gtk_list_box_append(se_list, GTK_WIDGET(row));
     }
 
-    GtkExpander *se_expander = GTK_EXPANDER(gtk_expander_new("Sensor"));
+    GtkExpander *se_expander = GTK_EXPANDER(gtk_expander_new(_("Sensor")));
     gtk_expander_set_expanded(se_expander, FALSE);
     gtk_expander_set_child(se_expander, GTK_WIDGET(se_list));
     gtk_widget_add_css_class(GTK_WIDGET(se_expander), "category-expander");

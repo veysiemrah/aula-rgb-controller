@@ -1,0 +1,302 @@
+# Turkish translations for f87control package
+# f87control paketi için Türkçe çeviriler.
+# Copyright (C) 2026 THE f87control'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the f87control package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: f87control\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-30 17:31+0300\n"
+"PO-Revision-Date: 2026-03-30 17:31+0300\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: gui/src/app_state.c:11
+msgid "Starting..."
+msgstr "Başlatılıyor..."
+
+#: gui/src/app_state.c:16
+msgid "Daemon connection failed"
+msgstr "Daemon'a bağlanılamadı"
+
+#: gui/src/app_state.c:25
+msgid "Could not get daemon status"
+msgstr "Daemon durumu alınamadı"
+
+#: gui/src/app_state.c:36 gui/src/app_state.c:73
+msgid "Connected (daemon)"
+msgstr "Bağlı (daemon)"
+
+#: gui/src/app_state.c:41 gui/src/app_state.c:78
+msgid "Keyboard not found"
+msgstr "Klavye bulunamadı"
+
+#: gui/src/app_state.c:64
+msgid "Scan failed"
+msgstr "Tarama başarısız"
+
+#: gui/src/app_state.c:112 gui/src/app_state.c:172
+msgid "Connection lost — could not reconnect"
+msgstr "Klavye bağlantısı koptu — yeniden bağlanamadı"
+
+#: gui/src/app_state.c:121 gui/src/app_state.c:181
+#, c-format
+msgid "%s running"
+msgstr "%s çalışıyor"
+
+#: gui/src/app_state.c:195
+msgid "Stop failed"
+msgstr "Durdurma hatası"
+
+#. Status bar
+#: gui/src/app_state.c:201 gui/src/window.c:157
+msgid "Waiting"
+msgstr "Bekleniyor"
+
+#: gui/src/app_state.c:218
+msgid "Per-key colors failed"
+msgstr "Per-key renkler gönderilemedi"
+
+#: gui/src/app_state.c:226
+msgid "Custom running"
+msgstr "Custom çalışıyor"
+
+#: gui/src/controls.c:441 gui/src/controls.c:716 gui/src/controls.c:792
+msgid "Save"
+msgstr "Kaydet"
+
+#: gui/src/controls.c:505
+msgid "Saving..."
+msgstr "Kaydediliyor..."
+
+#: gui/src/controls.c:579
+msgid "key-press reactive"
+msgstr "tuş basmaya duyarlı"
+
+#: gui/src/controls.c:598
+msgid "Brightness"
+msgstr "Parlaklık"
+
+#: gui/src/controls.c:601
+msgid "Speed"
+msgstr "Hız"
+
+#: gui/src/controls.c:607
+msgid "Colorful mode"
+msgstr "Renkli mod"
+
+#: gui/src/controls.c:614
+msgid "mixed colors"
+msgstr "karışık renkler"
+
+#: gui/src/controls.c:623
+msgid "Source"
+msgstr "Kaynak"
+
+#: gui/src/controls.c:628
+msgid "System Audio"
+msgstr "Sistem Sesi"
+
+#: gui/src/controls.c:628
+msgid "Microphone"
+msgstr "Mikrofon"
+
+#: gui/src/controls.c:634
+msgid "Auto Gain"
+msgstr "Otomatik Kazanç"
+
+#: gui/src/controls.c:643
+msgid "Gain"
+msgstr "Kazanç"
+
+#: gui/src/controls.c:648
+msgid "Profile"
+msgstr "Profil"
+
+#: gui/src/controls.c:660
+msgid "Select color, paint by clicking keys"
+msgstr "Renk seç, tuşlarını tıklayarak boya"
+
+#: gui/src/controls.c:667
+msgid "Fill All"
+msgstr "Tümünü Boya"
+
+#: gui/src/controls.c:669
+msgid "Clear"
+msgstr "Temizle"
+
+#: gui/src/controls.c:782
+msgid "Select effect"
+msgstr "Efekt seçiniz"
+
+#: gui/src/controls.c:798
+msgid "Stop"
+msgstr "Durdur"
+
+#: gui/src/sidebar.c:76
+msgid "Turn off all LEDs"
+msgstr "Tüm LED'leri kapat"
+
+#: gui/src/sidebar.c:77
+msgid "Single solid color"
+msgstr "Tek düz renk"
+
+#: gui/src/sidebar.c:78
+msgid "Pulsing color fade"
+msgstr "Nefes alan renk"
+
+#: gui/src/sidebar.c:79
+msgid "Rainbow wave across keyboard"
+msgstr "Klavye boyunca gökkuşağı dalgası"
+
+#: gui/src/sidebar.c:80
+msgid "Color spread from key presses"
+msgstr "Tuş basımından renk yayılması"
+
+#: gui/src/sidebar.c:81
+msgid "Falling rain drops"
+msgstr "Düşen yağmur damlaları"
+
+#: gui/src/sidebar.c:82
+msgid "Ripple waves from key presses"
+msgstr "Tuş basımından dalga"
+
+#: gui/src/sidebar.c:83
+msgid "Random twinkling stars"
+msgstr "Rastgele parlayan yıldızlar"
+
+#: gui/src/sidebar.c:84
+msgid "Snake trail moving across keys"
+msgstr "Tuşlar üzerinde yılan izi"
+
+#: gui/src/sidebar.c:85
+msgid "Northern lights shimmer"
+msgstr "Kuzey ışıkları parıltısı"
+
+#: gui/src/sidebar.c:86
+msgid "Single key lights up on press"
+msgstr "Basılan tuş yanar"
+
+#: gui/src/sidebar.c:87
+msgid "Scrolling light marquee"
+msgstr "Kayan ışık şeridi"
+
+#: gui/src/sidebar.c:88
+msgid "Circular rainbow pattern"
+msgstr "Dairesel gökkuşağı deseni"
+
+#: gui/src/sidebar.c:89
+msgid "Top to bottom wave"
+msgstr "Yukarıdan aşağı dalga"
+
+#: gui/src/sidebar.c:90
+msgid "Ripple from center outward"
+msgstr "Merkezden dışa dalga"
+
+#: gui/src/sidebar.c:91
+msgid "Paint each key individually"
+msgstr "Her tuşu ayrı ayrı boya"
+
+#: gui/src/sidebar.c:94
+msgid "Hardware Effects"
+msgstr "Donanım Efektleri"
+
+#: gui/src/sidebar.c:97
+msgid "Doom fire algorithm"
+msgstr "Doom ateş algoritması"
+
+#: gui/src/sidebar.c:98
+msgid "Matrix digital rain"
+msgstr "Matrix dijital yağmur"
+
+#: gui/src/sidebar.c:99
+msgid "Colorful plasma waves"
+msgstr "Renkli plazma dalgaları"
+
+#: gui/src/sidebar.c:100
+msgid "Rotating radar sweep"
+msgstr "Dönen radar taraması"
+
+#: gui/src/sidebar.c:101
+msgid "Random lightning bolts"
+msgstr "Rastgele şimşek çakması"
+
+#: gui/src/sidebar.c:102
+msgid "Colorful explosions on key press"
+msgstr "Tuş basımında renkli patlama"
+
+#: gui/src/sidebar.c:103
+msgid "Software ripple waves on key press"
+msgstr "Tuş basımında yazılımsal dalga"
+
+#: gui/src/sidebar.c:104
+msgid "Heat trail on key press"
+msgstr "Tuş basımında ısı izi"
+
+#: gui/src/sidebar.c:105
+msgid "Conway's Game of Life on key press"
+msgstr "Tuş basımıyla Conway'in Yaşam Oyunu"
+
+#: gui/src/sidebar.c:106
+msgid "Cumulative key usage heatmap"
+msgstr "Kümülatif tuş kullanımı ısı haritası"
+
+#: gui/src/sidebar.c:109
+msgid "Software Effects"
+msgstr "Yazılımsal Efektler"
+
+#: gui/src/sidebar.c:112
+msgid "Audio spectrum analyzer bars"
+msgstr "Ses spektrum analiz çubukları"
+
+#: gui/src/sidebar.c:113
+msgid "Flash on beat detection"
+msgstr "Ritim algılamada flaş"
+
+#: gui/src/sidebar.c:114
+msgid "Expanding energy waves from audio"
+msgstr "Sesten yayılan enerji dalgaları"
+
+#: gui/src/sidebar.c:115
+msgid "Classic VU meter display"
+msgstr "Klasik VU metre göstergesi"
+
+#: gui/src/sidebar.c:116
+msgid "Frequency band mapping"
+msgstr "Frekans bandı haritalama"
+
+#: gui/src/sidebar.c:119
+msgid "Music"
+msgstr "Müzik"
+
+#: gui/src/sidebar.c:122
+msgid "Developer sensor profile"
+msgstr "Geliştirici sensör profili"
+
+#: gui/src/sidebar.c:123
+msgid "Gamer sensor profile"
+msgstr "Oyuncu sensör profili"
+
+#: gui/src/sidebar.c:124
+msgid "System monitor profile"
+msgstr "Sistem izleme profili"
+
+#: gui/src/sidebar.c:136
+msgid "Sensor"
+msgstr "Sensör"
+
+#: gui/src/window.c:67
+#, c-format
+msgid "Selected: %s"
+msgstr "Seçilen: %s"
+
+#: gui/src/window.c:118
+msgid "Rescan for keyboard"
+msgstr "Klavyeyi yeniden tara"

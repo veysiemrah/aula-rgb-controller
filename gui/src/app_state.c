@@ -1,4 +1,5 @@
 #include "app_state.h"
+#include "i18n.h"
 #include <f87/logger.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,12 +8,12 @@ int f87_app_state_init(f87_app_state_t *state)
 {
     memset(state, 0, sizeof(*state));
     state->status = F87_GUI_IDLE;
-    snprintf(state->status_text, sizeof(state->status_text), "Baslatiliyor...");
+    snprintf(state->status_text, sizeof(state->status_text), "%s", _("Starting..."));
 
     state->client = f87_client_connect();
     if (!state->client) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Daemon'a baglanilamadi");
+                 "%s", _("Daemon connection failed"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
         return -1;
@@ -21,7 +22,7 @@ int f87_app_state_init(f87_app_state_t *state)
     f87_client_status_t st;
     if (f87_client_get_status(state->client, &st) < 0) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Daemon durumu alinamadi");
+                 "%s", _("Could not get daemon status"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
         f87_client_disconnect(state->client);
@@ -32,12 +33,12 @@ int f87_app_state_init(f87_app_state_t *state)
     state->device_connected = st.connected;
     if (st.connected) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Bagli (daemon)");
+                 "%s", _("Connected (daemon)"));
         state->status = F87_GUI_IDLE;
         state->status_level = F87_LOG_INFO;
     } else {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Klavye bulunamadi");
+                 "%s", _("Keyboard not found"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
     }
@@ -60,7 +61,7 @@ int f87_app_state_rescan(f87_app_state_t *state)
     int rc = f87_client_rescan(state->client);
     if (rc < 0) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Tarama basarisiz");
+                 "%s", _("Scan failed"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
         return -1;
@@ -69,12 +70,12 @@ int f87_app_state_rescan(f87_app_state_t *state)
     state->device_connected = f87_client_is_connected(state->client) > 0;
     if (state->device_connected) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Bagli (daemon)");
+                 "%s", _("Connected (daemon)"));
         state->status = F87_GUI_IDLE;
         state->status_level = F87_LOG_INFO;
     } else {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Klavye bulunamadi");
+                 "%s", _("Keyboard not found"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
     }
@@ -108,7 +109,7 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
         }
         if (rc < 0) {
             snprintf(state->status_text, sizeof(state->status_text),
-                     "Klavye baglantisi koptu — yeniden baglanamadi");
+                     "%s", _("Connection lost — could not reconnect"));
             state->status = F87_GUI_ERROR;
             state->status_level = F87_LOG_ERROR;
             state->device_connected = false;
@@ -117,7 +118,7 @@ int f87_app_state_start_hw(f87_app_state_t *state, int mode_id,
     }
 
     snprintf(state->status_text, sizeof(state->status_text),
-             "%s calisiyor", f87_mode_name((f87_mode)mode_id));
+             _("%s running"), f87_mode_name((f87_mode)mode_id));
     state->status = F87_GUI_RUNNING;
     state->status_level = F87_LOG_INFO;
     state->current_effect_id = mode_id;
@@ -168,7 +169,7 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
         }
         if (rc < 0) {
             snprintf(state->status_text, sizeof(state->status_text),
-                     "Klavye baglantisi koptu — yeniden baglanamadi");
+                     "%s", _("Connection lost — could not reconnect"));
             state->status = F87_GUI_ERROR;
             state->status_level = F87_LOG_ERROR;
             state->device_connected = false;
@@ -177,7 +178,7 @@ int f87_app_state_start_sw(f87_app_state_t *state, int effect_id,
     }
 
     snprintf(state->status_text, sizeof(state->status_text),
-             "%s calisiyor", f87_sw_effect_name((f87_sw_effect_id)effect_id));
+             _("%s running"), f87_sw_effect_name((f87_sw_effect_id)effect_id));
     state->status = F87_GUI_RUNNING;
     state->status_level = F87_LOG_INFO;
     state->current_effect_id = effect_id;
@@ -191,13 +192,13 @@ int f87_app_state_stop(f87_app_state_t *state)
     int rc = f87_client_stop(state->client);
     if (rc < 0) {
         snprintf(state->status_text, sizeof(state->status_text),
-                 "Durdurma hatasi");
+                 "%s", _("Stop failed"));
         state->status = F87_GUI_ERROR;
         state->status_level = F87_LOG_ERROR;
         return rc;
     }
 
-    snprintf(state->status_text, sizeof(state->status_text), "Bekleniyor");
+    snprintf(state->status_text, sizeof(state->status_text), "%s", _("Waiting"));
     state->status = F87_GUI_IDLE;
     state->status_level = F87_LOG_INFO;
     return 0;
@@ -214,7 +215,7 @@ int f87_app_state_apply_custom(f87_app_state_t *state,
             rc = f87_client_set_per_key_colors(state->client, colors, count);
         if (rc < 0) {
             snprintf(state->status_text, sizeof(state->status_text),
-                     "Per-key renkler gonderilemedi");
+                     "%s", _("Per-key colors failed"));
             state->status = F87_GUI_ERROR;
             state->status_level = F87_LOG_ERROR;
             return -1;
@@ -222,7 +223,7 @@ int f87_app_state_apply_custom(f87_app_state_t *state,
     }
 
     snprintf(state->status_text, sizeof(state->status_text),
-             "Custom calisiyor");
+             "%s", _("Custom running"));
     state->status = F87_GUI_RUNNING;
     state->status_level = F87_LOG_INFO;
     state->current_effect_id = 18;

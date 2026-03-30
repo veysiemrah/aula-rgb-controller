@@ -115,6 +115,8 @@ struct _F87KeyboardView {
     gboolean paint_mode;
     F87KeyPaintCallback paint_cb;
     gpointer paint_data;
+    gboolean paint_dragging;
+    int last_painted_key;
 };
 
 G_DEFINE_TYPE(F87KeyboardView, f87_keyboard_view, GTK_TYPE_DRAWING_AREA)
@@ -247,37 +249,77 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
     }
 }
 
-static void on_key_clicked(GtkGestureClick *gesture, int n_press, double x, double y,
+static void on_key_pressed(GtkGestureClick *gesture, int n_press, double x, double y,
                             gpointer user_data)
 {
     (void)gesture; (void)n_press;
     F87KeyboardView *self = user_data;
     if (!self->paint_mode) return;
 
+    self->paint_dragging = TRUE;
+    self->last_painted_key = -1;
+
     int w = gtk_widget_get_width(GTK_WIDGET(self));
     int h = gtk_widget_get_height(GTK_WIDGET(self));
     int key_id = hit_test((int)x, (int)y, w, h);
-    if (key_id >= 0 && self->paint_cb)
-        self->paint_cb(key_id, self->paint_data);
+    if (key_id >= 0) {
+        self->last_painted_key = key_id;
+        if (self->paint_cb)
+            self->paint_cb(key_id, self->paint_data);
+    }
+}
+
+static void on_key_released(GtkGestureClick *gesture, int n_press, double x, double y,
+                             gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)x; (void)y;
+    F87KeyboardView *self = user_data;
+    self->paint_dragging = FALSE;
+    self->last_painted_key = -1;
+}
+
+static void on_paint_motion(GtkEventControllerMotion *motion,
+                             double x, double y, gpointer data)
+{
+    (void)motion;
+    F87KeyboardView *self = data;
+    if (!self->paint_mode || !self->paint_dragging) return;
+
+    int w = gtk_widget_get_width(GTK_WIDGET(self));
+    int h = gtk_widget_get_height(GTK_WIDGET(self));
+    int key_id = hit_test((int)x, (int)y, w, h);
+    if (key_id >= 0 && key_id != self->last_painted_key) {
+        self->last_painted_key = key_id;
+        if (self->paint_cb)
+            self->paint_cb(key_id, self->paint_data);
+    }
 }
 
 static void f87_keyboard_view_init(F87KeyboardView *self)
 {
     memset(self->colors, 0, sizeof(self->colors));
+    self->last_painted_key = -1;
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(self), draw_func, NULL, NULL);
-    /* Aspect ratio matches KB.ini reference (689:255 ~ 2.7:1) */
-    gtk_widget_set_size_request(GTK_WIDGET(self), 690, 255);
+
+    /* Responsive: expand horizontally, keep aspect ratio via content size */
+    gtk_widget_set_size_request(GTK_WIDGET(self), 500, -1);
     gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(self), 690);
     gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(self), 255);
-    gtk_widget_set_halign(GTK_WIDGET(self), GTK_ALIGN_CENTER);
+    gtk_widget_set_halign(GTK_WIDGET(self), GTK_ALIGN_FILL);
     gtk_widget_set_valign(GTK_WIDGET(self), GTK_ALIGN_CENTER);
-    gtk_widget_set_hexpand(GTK_WIDGET(self), FALSE);
+    gtk_widget_set_hexpand(GTK_WIDGET(self), TRUE);
     gtk_widget_set_vexpand(GTK_WIDGET(self), FALSE);
 
     /* Click handler for paint mode */
     GtkGesture *click = gtk_gesture_click_new();
-    g_signal_connect(click, "pressed", G_CALLBACK(on_key_clicked), self);
+    g_signal_connect(click, "pressed", G_CALLBACK(on_key_pressed), self);
+    g_signal_connect(click, "released", G_CALLBACK(on_key_released), self);
     gtk_widget_add_controller(GTK_WIDGET(self), GTK_EVENT_CONTROLLER(click));
+
+    /* Motion handler for drag-to-paint */
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "motion", G_CALLBACK(on_paint_motion), self);
+    gtk_widget_add_controller(GTK_WIDGET(self), motion);
 }
 
 static void f87_keyboard_view_class_init(F87KeyboardViewClass *klass)

@@ -20,4 +20,11 @@ void f87_controls_set_keyboard(F87Controls *ctrl, F87KeyboardView *keyboard);
 
 GtkWidget *f87_controls_get_widget(F87Controls *ctrl);
 
+/* Get current selected color (3-byte RGB array) */
+const uint8_t *f87_controls_get_color(F87Controls *ctrl);
+
+/* Trigger send/stop from external shortcut */
+void f87_controls_send(F87Controls *ctrl);
+void f87_controls_stop(F87Controls *ctrl);
+
 #endif /* F87_CONTROLS_H */

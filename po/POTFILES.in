@@ -1,0 +1,7 @@
+gui/src/main.c
+gui/src/i18n.c
+gui/src/window.c
+gui/src/sidebar.c
+gui/src/controls.c
+gui/src/app_state.c
+gui/src/keyboard_view.c

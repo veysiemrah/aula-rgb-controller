@@ -3,6 +3,8 @@
 #include "app_state.h"
 #include "controls.h"
 #include "keyboard_view.h"
+#include "effect_meta.h"
+#include "i18n.h"
 #include <stdio.h>
 
 struct _F87Window {
@@ -11,9 +13,11 @@ struct _F87Window {
     GtkBox *sidebar_box;
     GtkBox *main_box;
     GtkLabel *status_label;
+    GtkButton *rescan_button;
     f87_app_state_t app_state;
     F87Controls *controls;
     F87KeyboardView *keyboard;
+    guint rescan_timer;
 };
 
 G_DEFINE_TYPE(F87Window, f87_window, ADW_TYPE_APPLICATION_WINDOW)
@@ -23,7 +27,6 @@ static void on_status_update(const char *text, gpointer user_data)
     F87Window *self = user_data;
     gtk_label_set_text(self->status_label, text);
 
-    /* Update color based on status */
     gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-error");
     gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-warn");
     gtk_widget_remove_css_class(GTK_WIDGET(self->status_label), "status-ok");
@@ -42,14 +45,16 @@ static void on_effect_selected(const char *category, const char *effect_name,
     F87Window *self = user_data;
     f87_controls_set_effect(self->controls, category, effect_name, effect_id);
 
-    /* Update keyboard preview with a default color for the selected effect */
-    if (strcmp(category, "hw") == 0 || strcmp(category, "sw") == 0) {
-        f87_keyboard_view_set_color(self->keyboard, 255, 80, 0);
-    } else if (strcmp(category, "music") == 0) {
-        f87_keyboard_view_set_color(self->keyboard, 0, 128, 255);
+    /* Apply controls' selected color to keyboard preview for consistency */
+    const effect_meta_t *meta = effect_meta_lookup(effect_id);
+    const uint8_t *c = f87_controls_get_color(self->controls);
+
+    if (meta->flags & F87_PARAM_COLOR) {
+        f87_keyboard_view_set_color(self->keyboard, c[0], c[1], c[2]);
+    } else if (meta->flags & F87_PARAM_PAINT) {
+        /* Paint mode — keyboard cleared by controls */
     } else if (strcmp(category, "sensor") == 0) {
         f87_keyboard_view_clear(self->keyboard);
-        /* Show sensor bar preview on F-keys */
         for (int i = 1; i <= 4; i++)
             f87_keyboard_view_set_key(self->keyboard, i, 0, 200, 0);
         for (int i = 5; i <= 8; i++)
@@ -59,14 +64,60 @@ static void on_effect_selected(const char *category, const char *effect_name,
     }
 
     char buf[256];
-    snprintf(buf, sizeof(buf), "Secilen: %s", effect_name);
+    snprintf(buf, sizeof(buf), _("Selected: %s"), effect_name);
     gtk_label_set_text(self->status_label, buf);
+}
+
+/* Rescan button */
+static gboolean on_rescan_cooldown(gpointer data)
+{
+    F87Window *self = data;
+    self->rescan_timer = 0;
+    gtk_widget_set_sensitive(GTK_WIDGET(self->rescan_button), TRUE);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_rescan_clicked(GtkButton *btn, gpointer data)
+{
+    (void)btn;
+    F87Window *self = data;
+    f87_app_state_rescan(&self->app_state);
+    on_status_update(self->app_state.status_text, self);
+
+    /* 2s cooldown to prevent USB rapid commands */
+    gtk_widget_set_sensitive(GTK_WIDGET(self->rescan_button), FALSE);
+    if (self->rescan_timer)
+        g_source_remove(self->rescan_timer);
+    self->rescan_timer = g_timeout_add(2000, on_rescan_cooldown, self);
+}
+
+/* Keyboard shortcuts */
+static gboolean on_save_shortcut(GtkWidget *widget, GVariant *args, gpointer data)
+{
+    (void)widget; (void)args;
+    F87Window *self = data;
+    f87_controls_send(self->controls);
+    return TRUE;
+}
+
+static gboolean on_stop_shortcut(GtkWidget *widget, GVariant *args, gpointer data)
+{
+    (void)widget; (void)args;
+    F87Window *self = data;
+    f87_controls_stop(self->controls);
+    on_status_update(self->app_state.status_text, self);
+    return TRUE;
 }
 
 static void f87_window_init(F87Window *self)
 {
-    /* Use AdwToolbarView for proper header + content layout */
     AdwHeaderBar *header = ADW_HEADER_BAR(adw_header_bar_new());
+
+    /* Rescan button in header */
+    self->rescan_button = GTK_BUTTON(gtk_button_new_from_icon_name("view-refresh-symbolic"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(self->rescan_button), _("Rescan for keyboard"));
+    adw_header_bar_pack_end(header, GTK_WIDGET(self->rescan_button));
+    g_signal_connect(self->rescan_button, "clicked", G_CALLBACK(on_rescan_clicked), self);
 
     AdwToolbarView *toolbar_view = ADW_TOOLBAR_VIEW(adw_toolbar_view_new());
     adw_toolbar_view_add_top_bar(toolbar_view, GTK_WIDGET(header));
@@ -82,7 +133,6 @@ static void f87_window_init(F87Window *self)
     self->sidebar_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
     gtk_widget_add_css_class(GTK_WIDGET(self->sidebar_box), "sidebar");
 
-    /* Populate sidebar with effect categories */
     GtkWidget *sidebar_content = f87_sidebar_create(on_effect_selected, self);
     gtk_box_append(self->sidebar_box, sidebar_content);
 
@@ -96,17 +146,15 @@ static void f87_window_init(F87Window *self)
     gtk_widget_set_margin_top(GTK_WIDGET(right_box), 12);
     gtk_widget_set_margin_bottom(GTK_WIDGET(right_box), 8);
 
-    /* Keyboard preview — fixed size, centered */
     self->keyboard = f87_keyboard_view_new();
     gtk_box_append(right_box, GTK_WIDGET(self->keyboard));
 
-    /* Control panel — scrollable parameters + fixed buttons at bottom */
     self->controls = f87_controls_new(&self->app_state, on_status_update, self);
     f87_controls_set_keyboard(self->controls, self->keyboard);
     gtk_box_append(right_box, f87_controls_get_widget(self->controls));
 
     /* Status bar */
-    self->status_label = GTK_LABEL(gtk_label_new("Bekleniyor"));
+    self->status_label = GTK_LABEL(gtk_label_new(_("Waiting")));
     gtk_widget_add_css_class(GTK_WIDGET(self->status_label), "status-bar");
     gtk_label_set_xalign(self->status_label, 0);
     gtk_box_append(right_box, GTK_WIDGET(self->status_label));
@@ -118,6 +166,17 @@ static void f87_window_init(F87Window *self)
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(self),
                                        GTK_WIDGET(toolbar_view));
 
+    /* Keyboard shortcuts */
+    GtkEventController *sc = gtk_shortcut_controller_new();
+    gtk_shortcut_controller_set_scope(GTK_SHORTCUT_CONTROLLER(sc), GTK_SHORTCUT_SCOPE_GLOBAL);
+    gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(sc), gtk_shortcut_new(
+        gtk_shortcut_trigger_parse_string("<Control>s"),
+        gtk_callback_action_new(on_save_shortcut, self, NULL)));
+    gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(sc), gtk_shortcut_new(
+        gtk_shortcut_trigger_parse_string("Escape"),
+        gtk_callback_action_new(on_stop_shortcut, self, NULL)));
+    gtk_widget_add_controller(GTK_WIDGET(self), sc);
+
     /* Initialize device connection */
     f87_app_state_init(&self->app_state);
     gtk_label_set_text(self->status_label, self->app_state.status_text);
@@ -128,6 +187,10 @@ static void f87_window_init(F87Window *self)
 static void f87_window_dispose(GObject *obj)
 {
     F87Window *self = F87_WINDOW(obj);
+    if (self->rescan_timer) {
+        g_source_remove(self->rescan_timer);
+        self->rescan_timer = 0;
+    }
     f87_app_state_destroy(&self->app_state);
     G_OBJECT_CLASS(f87_window_parent_class)->dispose(obj);
 }

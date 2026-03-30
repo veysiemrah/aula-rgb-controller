@@ -4,3 +4,4 @@ build/
 *.so.*
 compile_commands.json
 .cache/
+.superpowers/

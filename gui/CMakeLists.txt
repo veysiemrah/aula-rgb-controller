@@ -17,6 +17,8 @@ add_custom_command(
 
 add_executable(f87control
     src/main.c
+    src/i18n.c
+    src/effect_meta.c
     src/window.c
     src/sidebar.c
     src/app_state.c
@@ -45,4 +47,30 @@ target_compile_options(f87control PRIVATE
     ${ADW_CFLAGS_OTHER}
 )
 
+target_compile_definitions(f87control PRIVATE
+    LOCALEDIR="${CMAKE_INSTALL_PREFIX}/share/locale"
+)
+
 install(TARGETS f87control DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Gettext .po -> .mo compilation
+find_program(MSGFMT msgfmt)
+if(MSGFMT)
+    set(LANGUAGES tr)
+    foreach(LANG ${LANGUAGES})
+        set(PO_FILE ${CMAKE_SOURCE_DIR}/po/${LANG}.po)
+        set(MO_DIR ${CMAKE_BINARY_DIR}/locale/${LANG}/LC_MESSAGES)
+        set(MO_FILE ${MO_DIR}/f87control.mo)
+        file(MAKE_DIRECTORY ${MO_DIR})
+        add_custom_command(
+            OUTPUT ${MO_FILE}
+            COMMAND ${MSGFMT} -o ${MO_FILE} ${PO_FILE}
+            DEPENDS ${PO_FILE}
+            COMMENT "Compiling ${LANG} translation"
+        )
+        list(APPEND MO_FILES ${MO_FILE})
+        install(FILES ${MO_FILE}
+                DESTINATION ${CMAKE_INSTALL_DATADIR}/locale/${LANG}/LC_MESSAGES)
+    endforeach()
+    add_custom_target(translations ALL DEPENDS ${MO_FILES})
+endif()

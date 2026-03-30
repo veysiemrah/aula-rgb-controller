@@ -1,6 +1,7 @@
 #include <adwaita.h>
 #include <f87/logger.h>
 #include "window.h"
+#include "i18n.h"
 
 static void on_activate(GtkApplication *app, gpointer user_data)
 {
@@ -25,6 +26,7 @@ static void on_activate(GtkApplication *app, gpointer user_data)
 
 int main(int argc, char *argv[])
 {
+    f87_i18n_init();
     f87_log_init(F87_LOG_STDERR);
 
     AdwApplication *app = adw_application_new("com.f87control",

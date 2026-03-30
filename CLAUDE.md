@@ -176,6 +176,7 @@ cd build && ctest --output-on-failure
   - Collapsible sidebar categories (GtkExpander)
   - HSV color picker (SV gradient + hue slider + hex input + presets)
   - Live keyboard preview animation (15fps, all effects)
+  - Realistic keyboard layout from AULA KB.ini (exact key sizes and positions)
   - Custom per-key paint mode (click keyboard to assign colors)
   - Compact split layout (sliders left, color picker right)
   - Loading animation on save, hover effects, auto-reconnect
@@ -207,6 +208,14 @@ cd build && ctest --output-on-failure
   - D-Bus: GetErrorHistory, ClearErrorHistory, SetLogLevel, GetLogLevel
   - GUI status bar color-coded (green=running, red=error)
   - All fprintf(stderr)/printf migrated to F87_LOG macros
+- Faz 8: Bugfix sweep + GUI overhaul (complete)
+  - 29 bugs fixed across all layers (lib, daemon, CLI, GUI, build)
+  - Critical: use-after-free (sensor_config), NULL deref (spectrum), D-Bus signature mismatch (SetMusicEffect iyyyd→iyyyyd)
+  - Memory leaks: spectrum thread-local ctx, D-Bus reply, SidebarData, client handle
+  - Race conditions: uninitialized mutex (sensor), ring buffer fence
+  - Build: -Wall -Wextra enabled, install rules, service file templates, test guards fixed
+  - GUI: realistic keyboard layout from KB.ini coordinates (exact key sizes/positions)
+  - GUI: batch preview redraw (88→1 queue_draw), sensor profile propagation
 
 ## Known Limitations (Firmware)
 
