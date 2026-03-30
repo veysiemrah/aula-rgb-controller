@@ -122,9 +122,15 @@ static void on_effect_selected(const char *category, const char *effect_name,
             f87_keyboard_view_set_key(self->keyboard, i, 0, 100, 255);
     }
 
-    char buf[256];
-    snprintf(buf, sizeof(buf), _("Selected: %s"), effect_name);
-    gtk_label_set_text(self->status_label, buf);
+    /* If effect is now running (auto-applied via hot-switch), show running status.
+     * Otherwise show selection. */
+    if (self->app_state.status == F87_GUI_RUNNING)
+        on_status_update(self->app_state.status_text, self);
+    else {
+        char buf[256];
+        snprintf(buf, sizeof(buf), _("Selected: %s"), effect_name);
+        gtk_label_set_text(self->status_label, buf);
+    }
 }
 
 /* ===== Auto-reconnect poll ===== */
@@ -142,12 +148,17 @@ static gboolean on_poll_connection(gpointer data)
             self->was_connected = TRUE;
             self->reconnect_failures = 0;
             self->app_state.device_connected = true;
-            snprintf(self->app_state.status_text,
-                     sizeof(self->app_state.status_text),
-                     "%s", _("Connected (daemon)"));
-            self->app_state.status = F87_GUI_IDLE;
-            self->app_state.status_level = F87_LOG_INFO;
-            on_status_update(self->app_state.status_text, self);
+            /* Show current effect or idle status */
+            if (self->app_state.status == F87_GUI_RUNNING) {
+                on_status_update(self->app_state.status_text, self);
+            } else {
+                snprintf(self->app_state.status_text,
+                         sizeof(self->app_state.status_text),
+                         "%s", _("Connected (daemon)"));
+                self->app_state.status = F87_GUI_IDLE;
+                self->app_state.status_level = F87_LOG_INFO;
+                on_status_update(self->app_state.status_text, self);
+            }
         }
         return G_SOURCE_CONTINUE;
     }
