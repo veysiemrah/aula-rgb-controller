@@ -176,7 +176,7 @@ static void render_rain(f87_preview_t *p)
 }
 
 /* Build S-shaped path: even rows left→right, odd rows right→left */
-static int snake_path[KEY_COUNT];
+static int snake_path[KEY_COUNT * 2];
 static int snake_path_len = 0;
 static int snake_path_built = 0;
 
@@ -205,14 +205,25 @@ static void build_snake_path(void)
                 }
     }
 
-    /* Build S-path: even rows forward, odd rows reverse */
+    /* Build S-path: zigzag down then back up (continuous loop) */
     snake_path_len = 0;
+    /* Down: row 0→5 */
     for (int r = 0; r < GRID_ROWS; r++) {
         if (r % 2 == 0) {
             for (int i = 0; i < row_count[r]; i++)
                 snake_path[snake_path_len++] = row_keys[r][i];
         } else {
             for (int i = row_count[r] - 1; i >= 0; i--)
+                snake_path[snake_path_len++] = row_keys[r][i];
+        }
+    }
+    /* Up: row 4→1 (skip row 5 and 0 to avoid duplicates) */
+    for (int r = GRID_ROWS - 2; r >= 1; r--) {
+        if (r % 2 == 0) {
+            for (int i = row_count[r] - 1; i >= 0; i--)
+                snake_path[snake_path_len++] = row_keys[r][i];
+        } else {
+            for (int i = 0; i < row_count[r]; i++)
                 snake_path[snake_path_len++] = row_keys[r][i];
         }
     }
