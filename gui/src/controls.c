@@ -762,9 +762,9 @@ static void build_controls_for_effect(F87Controls *ctrl)
         g_signal_connect(ctrl->send_button, "clicked", G_CALLBACK(on_send_clicked), ctrl);
         gtk_box_append(ctrl->params_box, GTK_WIDGET(ctrl->send_button));
 
+        /* No preview animation — sensor_editor sets key colors directly */
         if (ctrl->preview)
-            f87_preview_start(ctrl->preview, ctrl->effect_id, ctrl->category,
-                              2, 0, 0, 0);
+            f87_preview_stop(ctrl->preview);
         return;
     }
 

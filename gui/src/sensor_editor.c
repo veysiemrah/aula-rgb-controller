@@ -190,6 +190,14 @@ static void update_keyboard_overlays(F87SensorEditor *ed)
     }
 
     f87_keyboard_view_set_overlays(ed->keyboard, overlays, ov_count);
+
+    /* Set key colors directly — no preview animation needed */
+    f87_keyboard_view_clear(ed->keyboard);
+    for (int i = 0; i < ov_count; i++) {
+        const f87_key_overlay_t *ov = &overlays[i];
+        f87_keyboard_view_set_key(ed->keyboard, ov->key_id,
+                                   ov->color[0], ov->color[1], ov->color[2]);
+    }
 }
 
 /* ===== Key collision check ===== */
