@@ -393,20 +393,12 @@ static void render_lightning(f87_preview_t *p)
 }
 
 /* --- Reactive: simulated keypress -> expanding rings --- */
-/* Simulate realistic typing — cycle through common key positions */
-static const int typing_keys[] = {
-    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, /* A-; (home row) */
-    31, 32, 33, 34, 35, 36, 37, 38, 39, 40, /* Q-P */
-    64, 65, 66, 67, 68, 69, 70, 71,         /* Z-M */
-    80,                                       /* SPACE */
-};
-#define TYPING_KEY_COUNT (sizeof(typing_keys) / sizeof(typing_keys[0]))
-
-static void simulate_keypress(f87_preview_t *p)
+static void inject_reactive_key(f87_preview_t *p, int key_id)
 {
     reactive_state_t *s = p->state;
+    if (!s) return;
     int idx = s->idx % REACTIVE_MAX;
-    s->items[idx].key_id = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
+    s->items[idx].key_id = key_id;
     s->items[idx].radius = 0.1f;
     s->items[idx].strength = 1.0f;
     s->items[idx].hue = (float)(rng_next(&p->rng) % 360);
@@ -416,7 +408,6 @@ static void simulate_keypress(f87_preview_t *p)
 static void render_explode(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
-    if (p->frame % (8 - p->speed) == 0) simulate_keypress(p);
 
     float max_r = 2.0f + (float)p->speed * 2.0f;
     for (int e = 0; e < REACTIVE_MAX; e++) {
@@ -450,7 +441,6 @@ static void render_explode(f87_preview_t *p)
 static void render_ripple_sw(f87_preview_t *p)
 {
     reactive_state_t *s = p->state;
-    if (p->frame % (8 - p->speed) == 0) simulate_keypress(p);
 
     float expand = 0.3f + (float)p->speed * 0.15f;
     for (int w = 0; w < REACTIVE_MAX; w++) {
@@ -486,10 +476,6 @@ static void render_ripple_sw(f87_preview_t *p)
 static void render_typewriter(f87_preview_t *p)
 {
     typewriter_state_t *s = p->state;
-    if (p->frame % (8 - p->speed) == 0) {
-        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
-        s->heat[k] = 1.0f;
-    }
     float decay = 0.96f - (float)p->speed * 0.01f;
     for (int k = 0; k < KEY_COUNT; k++) {
         s->heat[k] *= decay;
@@ -511,9 +497,8 @@ static void render_life(f87_preview_t *p)
     life_state_t *s = p->state;
     int interval = 15 - p->speed * 3; if (interval < 3) interval = 3;
 
-    /* Simulate typing to seed cells */
-    if (p->frame % 20 == 0) {
-        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
+    if (0) {
+        int k = 0; /* Life cells are seeded by f87_preview_on_key */
         int row = f87_key_layout[k].row, col = f87_key_layout[k].col;
         for (int dr = -1; dr <= 1; dr++)
             for (int dc = -1; dc <= 1; dc++) {
@@ -559,9 +544,9 @@ static void render_life(f87_preview_t *p)
 static void render_keyheat(f87_preview_t *p)
 {
     keyheat_state_t *s = p->state;
-    /* Simulate typing */
-    if (p->frame % 3 == 0) {
-        int k = typing_keys[rng_next(&p->rng) % TYPING_KEY_COUNT];
+    /* KeyHeat accumulates from f87_preview_on_key — no auto-sim */
+    if (0) {
+        int k = 0;
         s->heat[k] += 1.0f;
         if (s->heat[k] > s->max_heat) s->max_heat = s->heat[k];
     }
@@ -728,6 +713,50 @@ void f87_preview_stop(f87_preview_t *prev)
 }
 
 /* Check if effect is reactive (needs keypress) */
+void f87_preview_on_key(f87_preview_t *prev, int key_id)
+{
+    if (!prev || key_id < 0 || key_id >= KEY_COUNT) return;
+
+    switch (prev->effect_id) {
+    case 110: /* Explode */
+    case 111: /* Ripple SW */
+        inject_reactive_key(prev, key_id);
+        break;
+    case 112: { /* Typewriter */
+        typewriter_state_t *s = prev->state;
+        if (s) s->heat[key_id] = 1.0f;
+        break;
+    }
+    case 113: { /* Life */
+        life_state_t *s = prev->state;
+        if (s) {
+            int row = f87_key_layout[key_id].row;
+            int col = f87_key_layout[key_id].col;
+            for (int dr = -1; dr <= 1; dr++)
+                for (int dc = -1; dc <= 1; dc++) {
+                    int r = row + dr, c = col + dc;
+                    if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
+                        s->grid[r][c] = 1;
+                        s->bright[r][c] = 1.0f;
+                    }
+                }
+        }
+        break;
+    }
+    case 114: { /* KeyHeat */
+        keyheat_state_t *s = prev->state;
+        if (s) {
+            s->heat[key_id] += 1.0f;
+            if (s->heat[key_id] > s->max_heat)
+                s->max_heat = s->heat[key_id];
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 int f87_preview_is_reactive(int effect_id)
 {
     return effect_id == 110 || effect_id == 111 || effect_id == 112 ||

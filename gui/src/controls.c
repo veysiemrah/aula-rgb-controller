@@ -306,6 +306,13 @@ static void on_key_painted(int key_id, gpointer user_data)
                                ctrl->selected_color[2]);
 }
 
+static void on_key_demo(int key_id, gpointer user_data)
+{
+    F87Controls *ctrl = user_data;
+    if (ctrl->preview)
+        f87_preview_on_key(ctrl->preview, key_id);
+}
+
 static void on_fill_clicked(GtkButton *btn, gpointer data)
 {
     (void)btn;
@@ -576,7 +583,8 @@ static void build_controls_for_effect(F87Controls *ctrl)
     }
 
     if (f87_preview_is_reactive(ctrl->effect_id)) {
-        GtkLabel *reactive_label = GTK_LABEL(gtk_label_new(_("key-press reactive")));
+        GtkLabel *reactive_label = GTK_LABEL(gtk_label_new(
+            _("Click keyboard to preview")));
         gtk_widget_set_opacity(GTK_WIDGET(reactive_label), 0.5);
         gtk_widget_add_css_class(GTK_WIDGET(reactive_label), "caption");
         gtk_widget_set_valign(GTK_WIDGET(reactive_label), GTK_ALIGN_CENTER);
@@ -690,6 +698,11 @@ static void build_controls_for_effect(F87Controls *ctrl)
     if ((flags & F87_PARAM_PAINT) && ctrl->keyboard) {
         f87_keyboard_view_clear(ctrl->keyboard);
         f87_keyboard_view_set_paint_mode(ctrl->keyboard, TRUE, on_key_painted, ctrl);
+    }
+
+    /* Enable reactive demo mode — click keys to trigger effect */
+    if (f87_preview_is_reactive(ctrl->effect_id) && ctrl->keyboard) {
+        f87_keyboard_view_set_paint_mode(ctrl->keyboard, TRUE, on_key_demo, ctrl);
     }
 }
 
