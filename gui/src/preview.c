@@ -407,7 +407,7 @@ static void inject_reactive_key(f87_preview_t *p, int key_id)
 
 static void render_spectrum_hw(f87_preview_t *p)
 {
-    /* Spectrum: horizontal line spread from pressed key */
+    /* Spectrum: horizontal line spread on same row only */
     reactive_state_t *s = p->state;
 
     for (int e = 0; e < REACTIVE_MAX; e++) {
@@ -423,13 +423,10 @@ static void render_spectrum_hw(f87_preview_t *p)
         for (int e = 0; e < REACTIVE_MAX; e++) {
             if (s->items[e].strength <= 0) continue;
             int src = s->items[e].key_id;
-            /* Only horizontal distance — same row or close rows */
-            int row_diff = abs(f87_key_layout[k].row - f87_key_layout[src].row);
-            if (row_diff > 1) continue;
+            if (f87_key_layout[k].row != f87_key_layout[src].row) continue;
             float dx = fabsf((float)(f87_key_layout[k].col - f87_key_layout[src].col));
             if (dx <= s->items[e].radius) {
                 float v = (1.0f - dx / (s->items[e].radius + 1.0f)) * s->items[e].strength;
-                if (row_diff == 1) v *= 0.4f;  /* fade on adjacent rows */
                 if (v > max_v) max_v = v;
             }
         }
