@@ -400,6 +400,16 @@ int f87_anim_set_effect(f87_anim_ctx_t *ctx, f87_sw_effect_id effect_id)
     ctx->effect_ctx.start_time_us = f87_time_us();
     ctx->effect_ctx.effect_data = NULL;
 
+    /* Open input device if new effect needs it and not yet open */
+    if (new_effect->needs_input && ctx->input_fd < 0)
+        ctx->input_fd = find_keyboard_input();
+
+    /* Close input device if new effect doesn't need it */
+    if (!new_effect->needs_input && ctx->input_fd >= 0) {
+        close(ctx->input_fd);
+        ctx->input_fd = -1;
+    }
+
     ctx->active_effect = new_effect;
     if (new_effect->init) {
         int rc = new_effect->init(&ctx->effect_ctx);
