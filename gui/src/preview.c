@@ -577,6 +577,47 @@ static void render_ripple_hw(f87_preview_t *p)
     }
 }
 
+static void render_sensor(f87_preview_t *p)
+{
+    /* Simulate sensor bar display — 4 sensors on F-key groups,
+     * levels slowly oscillate to show the bar/color effect */
+    memset(p->buf, 0, sizeof(p->buf));
+    float t = (float)p->frame * 0.03f;
+
+    /* 4 sensor groups mapped to F-key rows:
+     * F1-F3: CPU temp, F4-F6: CPU load, F7-F9: RAM, F10-F12: GPU */
+    struct { int start; int count; float phase; } groups[] = {
+        {1,  3, 0.0f},   /* F1-F3 */
+        {4,  3, 1.5f},   /* F4-F6 */
+        {7,  3, 3.0f},   /* F7-F9 */
+        {10, 3, 4.5f},   /* F10-F12 */
+    };
+
+    for (int g = 0; g < 4; g++) {
+        /* Simulated sensor value: 0.2-0.9 oscillating */
+        float val = 0.55f + 0.35f * sinf(t + groups[g].phase);
+        int lit = (int)(val * groups[g].count + 0.5f);
+        if (lit > groups[g].count) lit = groups[g].count;
+
+        for (int i = 0; i < groups[g].count; i++) {
+            int key = groups[g].start + i;
+            if (key >= KEY_COUNT) break;
+            if (i < lit) {
+                /* Green → yellow → red based on level */
+                float ratio = (float)i / (float)(groups[g].count - 1);
+                uint8_t r = (uint8_t)(ratio * 255);
+                uint8_t gr = (uint8_t)((1.0f - ratio) * 255);
+                p->buf[key][0] = r;
+                p->buf[key][1] = gr;
+                p->buf[key][2] = 0;
+            }
+        }
+    }
+
+    /* Also light ESC as indicator */
+    p->buf[0][0] = 0; p->buf[0][1] = 100; p->buf[0][2] = 255;
+}
+
 static void render_aurora(f87_preview_t *p)
 {
     float t = (float)p->frame * speed_mult(p->speed) * 0.06f;
@@ -862,7 +903,7 @@ static void render_frame(f87_preview_t *p)
     case 203: render_spectrum_music(p); break;
     case 204: render_wave(p); break;
     case 106: case 107: case 108:
-        render_static(p); break;  /* Sensor — no meaningful preview */
+        render_sensor(p); break;
     default:  render_breathing(p); break;
     }
 }
