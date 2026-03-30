@@ -243,8 +243,8 @@ static void render_snake(f87_preview_t *p)
         int idx = snake_path[pos];
         float br = 1.0f - (float)i / (float)len;
         if (p->colorful) {
-            float hue = fmodf((float)pos * (360.0f / snake_path_len) +
-                              (float)p->frame * 3.0f, 360.0f);
+            uint32_t seed = (uint32_t)(pos * 7919 + p->frame / 4);
+            float hue = (float)(rng_next(&seed) % 360);
             hsv(hue, 1.0f, br, &p->buf[idx][0], &p->buf[idx][1], &p->buf[idx][2]);
         } else {
             p->buf[idx][0] = (uint8_t)(p->color[0] * br);
