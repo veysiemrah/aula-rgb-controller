@@ -70,6 +70,7 @@ static void update_status(F87Controls *ctrl, const char *text)
 /* Forward declarations for live update */
 static gboolean is_direct_mode_effect(F87Controls *ctrl);
 static int send_sw_effect(F87Controls *ctrl);
+static void update_button_state(F87Controls *ctrl);
 
 /* ===== HSV <-> RGB ===== */
 
@@ -146,8 +147,12 @@ static void sync_color_from_hsv(F87Controls *ctrl)
                                ctrl->selected_color[2]);
 
     /* Live update running SW effect on keyboard */
-    if (ctrl->sw_running && is_direct_mode_effect(ctrl))
-        send_sw_effect(ctrl);
+    if (ctrl->sw_running && is_direct_mode_effect(ctrl)) {
+        if (send_sw_effect(ctrl) < 0) {
+            ctrl->sw_running = FALSE;
+            update_button_state(ctrl);
+        }
+    }
 }
 
 /* ===== SV GRADIENT AREA ===== */
@@ -590,8 +595,12 @@ static void do_send(F87Controls *ctrl)
             return;
         }
         rc = send_sw_effect(ctrl);
-        if (rc == 0)
+        if (rc == 0) {
             ctrl->sw_running = TRUE;
+        } else {
+            ctrl->sw_running = FALSE;
+            update_button_state(ctrl);
+        }
     }
 
     update_status(ctrl, ctrl->state->status_text);
@@ -827,6 +836,8 @@ void f87_controls_set_effect(F87Controls *ctrl, const char *category,
         if (rc == 0) {
             ctrl->sw_running = TRUE;
             update_status(ctrl, ctrl->state->status_text);
+        } else {
+            ctrl->sw_running = FALSE;
         }
     } else if (was_direct && !is_direct_mode_effect(ctrl)) {
         /* Switching from SW to HW — stop direct mode */
@@ -880,6 +891,12 @@ void f87_controls_send(F87Controls *ctrl)
 void f87_controls_stop(F87Controls *ctrl)
 {
     do_stop(ctrl);
+}
+
+void f87_controls_reset_sw_state(F87Controls *ctrl)
+{
+    ctrl->sw_running = FALSE;
+    update_button_state(ctrl);
 }
 
 F87Controls *f87_controls_new(f87_app_state_t *state,

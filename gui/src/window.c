@@ -154,9 +154,10 @@ static gboolean on_poll_connection(gpointer data)
 
     /* Disconnected */
     if (self->was_connected) {
-        /* Just lost connection — start reconnect attempts */
+        /* Just lost connection — reset direct mode state and start reconnect */
         self->was_connected = FALSE;
         self->reconnect_failures = 0;
+        f87_controls_reset_sw_state(self->controls);
     }
 
     if (self->reconnect_failures >= RECONNECT_MAX) {

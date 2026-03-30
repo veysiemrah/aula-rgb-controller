@@ -27,4 +27,7 @@ const uint8_t *f87_controls_get_color(F87Controls *ctrl);
 void f87_controls_send(F87Controls *ctrl);
 void f87_controls_stop(F87Controls *ctrl);
 
+/* Reset direct-mode state (call when device disconnects) */
+void f87_controls_reset_sw_state(F87Controls *ctrl);
+
 #endif /* F87_CONTROLS_H */
