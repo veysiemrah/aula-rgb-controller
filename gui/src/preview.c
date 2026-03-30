@@ -861,7 +861,8 @@ static void render_frame(f87_preview_t *p)
     case 202: render_breathing(p); break;
     case 203: render_spectrum_music(p); break;
     case 204: render_wave(p); break;
-    case 106: render_fire(p); break;
+    case 106: case 107: case 108:
+        render_static(p); break;  /* Sensor — no meaningful preview */
     default:  render_breathing(p); break;
     }
 }
