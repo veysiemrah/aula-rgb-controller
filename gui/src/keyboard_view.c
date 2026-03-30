@@ -222,7 +222,7 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
 
         /* Key label */
         if (f87_key_layout[i].name && tw > 8) {
-            cairo_set_source_rgba(cr, 1, 1, 1, 0.45);
+            cairo_set_source_rgba(cr, 1, 1, 1, 0.75);
 
             double font_size = th * 0.38;
             if (font_size < 5) font_size = 5;
