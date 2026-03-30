@@ -196,31 +196,24 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
         uint8_t g = self->colors[i][1];
         uint8_t b = self->colors[i][2];
 
-        /* Treat very dim LEDs as off — smooth transition to unlit state */
-        gboolean led_off = (r + g + b) < 12;
-
-        /* Key base (slightly lighter than case) */
+        /* Key base */
         draw_rounded_rect(cr, x, y, w, h, radius);
-        if (led_off) {
-            cairo_set_source_rgb(cr, 0.20, 0.20, 0.24);
-        } else {
+        {
             double fr = r / 255.0, fg = g / 255.0, fb = b / 255.0;
-            cairo_set_source_rgb(cr, fr * 0.3 + 0.10,
-                                     fg * 0.3 + 0.10,
-                                     fb * 0.3 + 0.10);
+            cairo_set_source_rgb(cr, fr * 0.3 + 0.05,
+                                     fg * 0.3 + 0.05,
+                                     fb * 0.3 + 0.05);
         }
         cairo_fill(cr);
 
-        /* Key top face (inset) — lighter, shows the LED color */
+        /* Key top face (inset) — shows the LED color */
         double inset = 1.5 * fmin(sx, sy);
         if (inset < 1.0) inset = 1.0;
         double tx = x + inset, ty = y + inset;
         double tw = w - 2 * inset, th = h - 2 * inset;
         if (tw > 0 && th > 0) {
             draw_rounded_rect(cr, tx, ty, tw, th, radius * 0.7);
-            if (led_off) {
-                cairo_set_source_rgb(cr, 0.25, 0.25, 0.30);
-            } else {
+            {
                 double fr = r / 255.0, fg = g / 255.0, fb = b / 255.0;
                 cairo_set_source_rgb(cr, fr, fg, fb);
             }
@@ -229,10 +222,8 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
 
         /* Key label */
         if (f87_key_layout[i].name && tw > 8) {
-            if (r == 0 && g == 0 && b == 0)
-                cairo_set_source_rgba(cr, 1, 1, 1, 0.45);
-            else
-                cairo_set_source_rgba(cr, 1, 1, 1, 0.75);
+            double label_alpha = ((r + g + b) < 30) ? 0.3 : 0.75;
+            cairo_set_source_rgba(cr, 1, 1, 1, label_alpha);
 
             double font_size = th * 0.38;
             if (font_size < 5) font_size = 5;
