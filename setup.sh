@@ -26,10 +26,10 @@ elif command -v dnf &>/dev/null; then
     fi
 elif command -v pacman &>/dev/null; then
     echo "[1/4] Installing dependencies (pacman)..."
-    sudo pacman -S --noconfirm libusb json-c libpulse systemd cmake base-devel
+    sudo pacman -S --noconfirm --needed libusb json-c libpulse systemd cmake base-devel
     read -p "Install GTK4 GUI? [y/N] " gui
     if [[ "$gui" =~ ^[Yy]$ ]]; then
-        sudo pacman -S --noconfirm gtk4 libadwaita
+        sudo pacman -S --noconfirm --needed gtk4 libadwaita
         GUI_FLAG="-DBUILD_GUI=ON"
     fi
 else
