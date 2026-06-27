@@ -42,12 +42,15 @@ if(SYSTEMD_FOUND)
 endif()
 
 pkg_check_modules(JSON_C json-c)
+pkg_check_modules(LIBUSB libusb-1.0)
 if(JSON_C_FOUND)
     add_executable(test_profile tests/test_profile.c daemon/src/profile_manager.c)
     target_include_directories(test_profile PRIVATE daemon/src ${JSON_C_INCLUDE_DIRS})
     target_link_libraries(test_profile PRIVATE ${JSON_C_LIBRARIES})
     add_test(NAME profile_tests COMMAND test_profile)
+endif()
 
+if(JSON_C_FOUND AND LIBUSB_FOUND)
     add_executable(test_sensor_config tests/test_sensor_config.c
                    lib/src/sensor_config.c lib/src/sensor.c lib/src/protocol.c lib/src/logger.c)
     target_include_directories(test_sensor_config PRIVATE lib/include lib/src
