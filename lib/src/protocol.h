@@ -116,10 +116,12 @@ struct f87_ctx {
 
 struct f87_device {
     f87_ctx *ctx;
-    void *usb_handle;        /* libusb_device_handle* */
+    void *usb_handle;        /* libusb_device_handle* (fallback transport only) */
+    int hidraw_fd;           /* /dev/hidrawN of interface 1, or -1 */
     f87_device_info info;
     char firmware_ver[32];
     int iface_claimed;
+    int kernel_detached;     /* we detached usbhid and must reattach it */
     uint8_t model_id;        /* device model from query response */
 
     /* Per-key color buffer for batch apply */

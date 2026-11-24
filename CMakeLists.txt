@@ -69,6 +69,11 @@ if(SYSTEMD_FOUND)
 endif()
 add_test(NAME logger_tests COMMAND test_logger)
 
+add_executable(test_hidraw tests/test_hidraw.c lib/src/hidraw.c)
+target_include_directories(test_hidraw PRIVATE lib/src)
+target_compile_options(test_hidraw PRIVATE -Wno-format-truncation)
+add_test(NAME hidraw_tests COMMAND test_hidraw)
+
 add_executable(test_error_history tests/test_error_history.c daemon/src/error_history.c)
 target_include_directories(test_error_history PRIVATE daemon/src lib/include lib/src)
 target_link_libraries(test_error_history Threads::Threads)

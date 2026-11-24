@@ -1,8 +1,70 @@
 #include "protocol.h"
 #include "f87/logger.h"
 #include <libusb-1.0/libusb.h>
+#include <linux/hidraw.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <unistd.h>  /* usleep */
+
+/*
+ * Feature report transport.
+ *
+ * Preferred: hidraw ioctls, which keep the kernel usbhid driver bound to
+ * interface 1 so the volume wheel / media keys keep working.
+ * Fallback: raw libusb control transfers (requires detaching usbhid).
+ *
+ * In both cases buf[0] is the report ID and the return value is the number
+ * of bytes transferred, or -1 on error.
+ */
+static int feature_set(f87_device *dev, uint8_t report_id,
+                       const uint8_t *buf, int len)
+{
+    if (dev->hidraw_fd >= 0)
+        return ioctl(dev->hidraw_fd, HIDIOCSFEATURE(len), buf) < 0 ? -1 : len;
+
+    if (!dev->usb_handle)
+        return -1;
+    int rc = libusb_control_transfer(
+        (libusb_device_handle *)dev->usb_handle,
+        F87_HID_RT_OUT,                 /* 0x21 */
+        F87_HID_SET_REPORT,             /* 0x09 */
+        (uint16_t)(0x0300 | report_id), /* feature report */
+        F87_IFACE_NUM,                  /* interface 1 */
+        (unsigned char *)buf,
+        (uint16_t)len,
+        F87_TIMEOUT_MS
+    );
+    return rc < 0 ? -1 : rc;
+}
+
+static int feature_get(f87_device *dev, uint8_t report_id,
+                       uint8_t *buf, int len, int timeout_ms)
+{
+    if (dev->hidraw_fd >= 0) {
+        buf[0] = report_id;
+        int rc = ioctl(dev->hidraw_fd, HIDIOCGFEATURE(len), buf);
+        return rc < 0 ? -1 : rc;
+    }
+
+    if (!dev->usb_handle)
+        return -1;
+    int rc = libusb_control_transfer(
+        (libusb_device_handle *)dev->usb_handle,
+        F87_HID_RT_IN,                  /* 0xA1 */
+        F87_HID_GET_REPORT,             /* 0x01 */
+        (uint16_t)(0x0300 | report_id),
+        F87_IFACE_NUM,
+        buf,
+        (uint16_t)len,
+        timeout_ms > 0 ? timeout_ms : F87_TIMEOUT_MS
+    );
+    return rc < 0 ? -1 : rc;
+}
+
+static int has_transport(const f87_device *dev)
+{
+    return dev->hidraw_fd >= 0 || dev->usb_handle != NULL;
+}
 
 /* F87_CMD_DELAY_US defined in protocol.h */
 
@@ -234,23 +296,10 @@ int f87_config_write(f87_device *dev, uint8_t effect_id, uint8_t brightness,
 int f87_pkt_send_report(f87_device *dev, uint8_t report_id,
                          const uint8_t *data, int len)
 {
-    if (!dev || !data || !dev->usb_handle || len <= 0)
+    if (!dev || !data || !has_transport(dev) || len <= 0)
         return -1;
 
-    uint16_t wvalue = 0x0300 | report_id;
-
-    int rc = libusb_control_transfer(
-        (libusb_device_handle *)dev->usb_handle,
-        F87_HID_RT_OUT,
-        F87_HID_SET_REPORT,
-        wvalue,
-        F87_IFACE_NUM,
-        (unsigned char *)data,
-        (uint16_t)len,
-        F87_TIMEOUT_MS
-    );
-
-    return (rc < 0) ? -1 : rc;
+    return feature_set(dev, report_id, data, len);
 }
 
 /*
@@ -356,19 +405,10 @@ void f87_pkt_build_direct_leds(f87_packet *pkt, const f87_color *colors,
  */
 int f87_pkt_send(f87_device *dev, const f87_packet *pkt)
 {
-    if (!dev || !pkt || !dev->usb_handle)
+    if (!dev || !pkt || !has_transport(dev))
         return -1;
 
-    int rc = libusb_control_transfer(
-        (libusb_device_handle *)dev->usb_handle,
-        F87_HID_RT_OUT,          /* 0x21 */
-        F87_HID_SET_REPORT,      /* 0x09 */
-        F87_HID_WVALUE,          /* 0x0306 */
-        F87_IFACE_NUM,           /* interface 1 */
-        (unsigned char *)pkt->data,
-        F87_REPORT_SIZE,
-        F87_TIMEOUT_MS
-    );
+    int rc = feature_set(dev, F87_REPORT_ID, pkt->data, F87_REPORT_SIZE);
 
     if (rc < 0) {
         F87_TRACE(F87_SRC_USB, "Send failed: %d", rc);
@@ -390,21 +430,13 @@ int f87_pkt_send(f87_device *dev, const f87_packet *pkt)
  */
 int f87_pkt_recv(f87_device *dev, f87_packet *pkt, int timeout_ms)
 {
-    if (!dev || !pkt || !dev->usb_handle)
+    if (!dev || !pkt || !has_transport(dev))
         return -1;
 
     f87_pkt_init(pkt);
 
-    int rc = libusb_control_transfer(
-        (libusb_device_handle *)dev->usb_handle,
-        F87_HID_RT_IN,           /* 0xA1 */
-        F87_HID_GET_REPORT,      /* 0x01 */
-        F87_HID_WVALUE,          /* 0x0306 */
-        F87_IFACE_NUM,           /* interface 1 */
-        pkt->data,
-        F87_REPORT_SIZE,
-        timeout_ms > 0 ? timeout_ms : F87_TIMEOUT_MS
-    );
+    int rc = feature_get(dev, F87_REPORT_ID, pkt->data, F87_REPORT_SIZE,
+                         timeout_ms);
 
     if (rc < 0) {
         F87_TRACE(F87_SRC_USB, "Recv failed: %d", rc);

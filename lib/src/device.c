@@ -1,6 +1,9 @@
 #include "f87/f87.h"
 #include "protocol.h"
+#include "hidraw.h"
 #include <libusb-1.0/libusb.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -187,35 +190,65 @@ f87_device *f87_open(f87_ctx *ctx, const f87_device_info *info)
         return NULL;
     }
 
-    libusb_device_handle *handle = NULL;
-    int rc = libusb_open(target, &handle);
-    libusb_free_device_list(devs, 1);
-    if (rc != 0)
-        return NULL;
-
-    /* Detach kernel driver if active */
-    if (libusb_kernel_driver_active(handle, F87_IFACE_NUM) == 1) {
-        libusb_detach_kernel_driver(handle, F87_IFACE_NUM);
-    }
-
-    /* Claim interface 1 (vendor-defined HID for lighting control) */
-    rc = libusb_claim_interface(handle, F87_IFACE_NUM);
-    if (rc != 0) {
-        libusb_close(handle);
-        return NULL;
-    }
-
     f87_device *dev = calloc(1, sizeof(f87_device));
     if (!dev) {
-        libusb_release_interface(handle, F87_IFACE_NUM);
-        libusb_close(handle);
+        libusb_free_device_list(devs, 1);
         return NULL;
     }
-
     dev->ctx = ctx;
-    dev->usb_handle = handle;
     dev->info = *info;
-    dev->iface_claimed = 1;
+    dev->hidraw_fd = -1;
+
+    /*
+     * Preferred transport: the hidraw node of interface 1. The kernel
+     * usbhid driver stays attached, so the volume wheel and media keys
+     * (Consumer Control collection on the same interface) keep working.
+     */
+    /*
+     * Right after hotplug, usbhid/udev may still be creating the node or
+     * applying its permissions, so retry briefly before falling back.
+     */
+    char hidraw_path[64];
+    for (int attempt = 0; attempt < 10 && dev->hidraw_fd < 0; attempt++) {
+        if (attempt > 0)
+            usleep(100 * 1000);
+        if (f87_hidraw_find("/sys/class/hidraw", info->bus, info->address,
+                            F87_IFACE_NUM, hidraw_path,
+                            sizeof(hidraw_path)) == 0)
+            dev->hidraw_fd = open(hidraw_path, O_RDWR | O_CLOEXEC);
+    }
+
+    if (dev->hidraw_fd < 0) {
+        /*
+         * Fallback: raw libusb. This needs usbhid detached from interface 1,
+         * which disables the volume wheel until the device is closed.
+         */
+        libusb_device_handle *handle = NULL;
+        int rc = libusb_open(target, &handle);
+        libusb_free_device_list(devs, 1);
+        if (rc != 0) {
+            free(dev);
+            return NULL;
+        }
+
+        if (libusb_kernel_driver_active(handle, F87_IFACE_NUM) == 1 &&
+            libusb_detach_kernel_driver(handle, F87_IFACE_NUM) == 0)
+            dev->kernel_detached = 1;
+
+        rc = libusb_claim_interface(handle, F87_IFACE_NUM);
+        if (rc != 0) {
+            if (dev->kernel_detached)
+                libusb_attach_kernel_driver(handle, F87_IFACE_NUM);
+            libusb_close(handle);
+            free(dev);
+            return NULL;
+        }
+        dev->usb_handle = handle;
+        dev->iface_claimed = 1;
+    } else {
+        libusb_free_device_list(devs, 1);
+    }
+
     dev->num_keys = F87_KEY_COUNT;
     dev->config_valid = 0;
     snprintf(dev->firmware_ver, sizeof(dev->firmware_ver), "unknown");
@@ -238,13 +271,16 @@ void f87_close(f87_device *dev)
     if (!dev)
         return;
 
+    if (dev->hidraw_fd >= 0)
+        close(dev->hidraw_fd);
+
     libusb_device_handle *handle = (libusb_device_handle *)dev->usb_handle;
 
     if (handle) {
         if (dev->iface_claimed) {
             libusb_release_interface(handle, F87_IFACE_NUM);
         }
-        /* Try to reattach kernel driver */
+        /* Give interface 1 back to usbhid so the volume wheel works again */
         libusb_attach_kernel_driver(handle, F87_IFACE_NUM);
         libusb_close(handle);
     }
