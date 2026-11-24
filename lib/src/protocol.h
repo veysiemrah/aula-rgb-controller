@@ -189,4 +189,10 @@ extern const uint8_t f87_led_index[F87_KEY_COUNT];
 /* Delay between USB transfers to let the device process (microseconds) */
 #define F87_CMD_DELAY_US  5000  /* 5ms */
 
+/* Pause after a colour-data packet (0x0A / 0x06) before the next command.
+ * The keyboard stores these in flash. A config read sent right behind one can
+ * crash the firmware: the keyboard drops off USB and re-enumerates (seen on an
+ * F87 TK while the indicator LED next to ESC shows its configured mode). */
+#define F87_COLOR_SETTLE_US  200000  /* 200ms */
+
 #endif /* F87_PROTOCOL_H */

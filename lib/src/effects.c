@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static const char *mode_names[F87_MODE_COUNT] = {
     [F87_MODE_OFF]            = "Off",
@@ -54,6 +55,7 @@ int f87_set_effect(f87_device *dev, const f87_effect *effect)
             int rc = f87_pkt_send(dev, &pkt);
             if (rc < 0)
                 return rc;
+            usleep(F87_COLOR_SETTLE_US);
         }
     }
 
@@ -65,6 +67,7 @@ int f87_set_effect(f87_device *dev, const f87_effect *effect)
         int rc = f87_pkt_send(dev, &pkt);
         if (rc < 0)
             return rc;
+        usleep(F87_COLOR_SETTLE_US);
     }
 
     /* Config read-modify-write */
