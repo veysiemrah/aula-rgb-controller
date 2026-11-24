@@ -1,5 +1,6 @@
 #include "protocol.h"
 #include <string.h>
+#include <unistd.h>
 
 /*
  * Set brightness for the current effect.
@@ -137,6 +138,7 @@ int f87_apply(f87_device *dev)
         rc = f87_pkt_send(dev, &pkt);
         if (rc < 0)
             return rc;
+        usleep(F87_COLOR_SETTLE_US);
 
         rc = f87_config_read(dev);
         if (rc < 0)
@@ -154,6 +156,7 @@ int f87_apply(f87_device *dev)
         rc = f87_pkt_send(dev, &pkt);
         if (rc < 0)
             return rc;
+        usleep(F87_COLOR_SETTLE_US);
 
         rc = f87_config_read(dev);
         if (rc < 0)
