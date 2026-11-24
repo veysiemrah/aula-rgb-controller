@@ -1,5 +1,6 @@
 #include "keyboard_view.h"
 #include "protocol.h"
+#include "i18n.h"
 #include <string.h>
 #include <math.h>
 
@@ -107,6 +108,13 @@ static const key_rect_t key_rects[F87_KEY_COUNT] = {
 #define REF_W   689.0
 #define REF_H   255.0
 
+/* Indicator LED between ESC and F1: a thin upright bar (centre and
+ * half-size in ref space; keys are 24 x 26) */
+#define IND_X   73.0
+#define IND_Y   34.0
+#define IND_HW   2.0
+#define IND_HH  10.0
+
 struct _F87KeyboardView {
     GtkDrawingArea parent;
     uint8_t colors[F87_KEY_COUNT][3];
@@ -126,6 +134,21 @@ struct _F87KeyboardView {
     gboolean click_mode;
     F87KeyClickCallback click_cb;
     gpointer click_data;
+
+    /* Indicator LED */
+    f87_indicator_style_t ind_style;
+    uint8_t ind_color[3];
+    gboolean ind_hover;
+    GtkWidget *ind_popover;
+    F87IndicatorOpenCallback ind_open_cb;
+    gpointer ind_open_data;
+    gboolean ind_hint;
+    guint ind_hint_tick;
+    double ind_hint_phase;  /* 0..1, drives the pulse */
+    GtkWidget *ind_callout;
+    guint ind_callout_timer;
+    F87IndicatorOpenCallback ind_dismiss_cb;
+    gpointer ind_dismiss_data;
 };
 
 G_DEFINE_TYPE(F87KeyboardView, f87_keyboard_view, GTK_TYPE_DRAWING_AREA)
@@ -171,6 +194,63 @@ static int hit_test(int px, int py, int width, int height)
             return i;
     }
     return -1;
+}
+
+static gboolean indicator_hit(double px, double py, int width, int height)
+{
+    double sx = (double)width / REF_W, sy = (double)height / REF_H;
+    double pad = 5.0;  /* generous click target around the thin bar */
+    return px >= (IND_X - IND_HW - pad) * sx && px <= (IND_X + IND_HW + pad) * sx &&
+           py >= (IND_Y - IND_HH - pad) * sy && py <= (IND_Y + IND_HH + pad) * sy;
+}
+
+static void draw_indicator(F87KeyboardView *self, cairo_t *cr,
+                           double sx, double sy)
+{
+    double s = fmin(sx, sy);
+    double x = (IND_X - IND_HW) * sx, y = (IND_Y - IND_HH) * sy;
+    double w = 2 * IND_HW * sx, h = 2 * IND_HH * sy;
+    double r = w / 2;
+
+    draw_rounded_rect(cr, x, y, w, h, r);
+    if (self->ind_style == F87_INDICATOR_RAINBOW) {
+        cairo_pattern_t *pat = cairo_pattern_create_linear(0, y, 0, y + h);
+        static const double rainbow[6][3] = {
+            {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 1, 1}, {0, 0, 1}, {1, 0, 1},
+        };
+        for (int i = 0; i < 6; i++)
+            cairo_pattern_add_color_stop_rgb(pat, i / 5.0, rainbow[i][0],
+                                             rainbow[i][1], rainbow[i][2]);
+        cairo_set_source(cr, pat);
+        cairo_fill(cr);
+        cairo_pattern_destroy(pat);
+    } else {
+        if (self->ind_style == F87_INDICATOR_SOLID)
+            cairo_set_source_rgb(cr, self->ind_color[0] / 255.0,
+                                 self->ind_color[1] / 255.0,
+                                 self->ind_color[2] / 255.0);
+        else
+            cairo_set_source_rgb(cr, 0.06, 0.06, 0.07);
+        cairo_fill(cr);
+    }
+
+    /* New-user hint: pulsing glow (the callout bubble does the talking) */
+    if (self->ind_hint) {
+        double a = 0.25 + 0.45 * (0.5 + 0.5 * sin(self->ind_hint_phase * 2 * G_PI));
+        double g = (3.0 + 2.0 * a) * s;
+        draw_rounded_rect(cr, x - g, y - g, w + 2 * g, h + 2 * g, r + g);
+        cairo_set_source_rgba(cr, 0.35, 0.65, 1.0, a);
+        cairo_set_line_width(cr, 2.0 * s);
+        cairo_stroke(cr);
+
+    }
+
+    /* Rim, brighter when hovered so it reads as clickable */
+    double m = 1.0 * s;
+    draw_rounded_rect(cr, x - m, y - m, w + 2 * m, h + 2 * m, r + m);
+    cairo_set_source_rgba(cr, 1, 1, 1, self->ind_hover ? 0.9 : 0.35);
+    cairo_set_line_width(cr, (self->ind_hover ? 1.5 : 1.0) * s);
+    cairo_stroke(cr);
 }
 
 static void draw_func(GtkDrawingArea *area, cairo_t *cr,
@@ -278,13 +358,31 @@ static void draw_func(GtkDrawingArea *area, cairo_t *cr,
             break;
         }
     }
+
+    draw_indicator(self, cr, sx, sy);
 }
+
+static GdkRectangle indicator_rect(F87KeyboardView *self);
+static void hint_dismiss(F87KeyboardView *self);
 
 static void on_key_pressed(GtkGestureClick *gesture, int n_press, double x, double y,
                             gpointer user_data)
 {
     (void)gesture; (void)n_press;
     F87KeyboardView *self = user_data;
+
+    /* Indicator LED opens its menu, whatever mode the view is in */
+    if (self->ind_popover &&
+        indicator_hit(x, y, gtk_widget_get_width(GTK_WIDGET(self)),
+                      gtk_widget_get_height(GTK_WIDGET(self)))) {
+        hint_dismiss(self);
+        if (self->ind_open_cb)
+            self->ind_open_cb(self->ind_open_data);
+        GdkRectangle rect = indicator_rect(self);
+        gtk_popover_set_pointing_to(GTK_POPOVER(self->ind_popover), &rect);
+        gtk_popover_popup(GTK_POPOVER(self->ind_popover));
+        return;
+    }
 
     /* Sensor click mode — single click, no drag */
     if (self->click_mode) {
@@ -320,11 +418,150 @@ static void on_key_released(GtkGestureClick *gesture, int n_press, double x, dou
     self->last_painted_key = -1;
 }
 
+static GdkRectangle indicator_rect(F87KeyboardView *self)
+{
+    double sx = gtk_widget_get_width(GTK_WIDGET(self)) / REF_W;
+    double sy = gtk_widget_get_height(GTK_WIDGET(self)) / REF_H;
+    GdkRectangle rect = {
+        (int)((IND_X - IND_HW) * sx), (int)((IND_Y - IND_HH) * sy),
+        (int)(2 * IND_HW * sx) + 1, (int)(2 * IND_HH * sy) + 1,
+    };
+    return rect;
+}
+
+static void hint_dismiss(F87KeyboardView *self)
+{
+    if (!self->ind_hint) return;
+    F87IndicatorOpenCallback cb = self->ind_dismiss_cb;
+    gpointer data = self->ind_dismiss_data;
+    f87_keyboard_view_set_indicator_hint(self, FALSE, NULL, NULL);
+    if (cb) cb(data);
+}
+
+static void on_callout_got_it(GtkButton *btn, gpointer data)
+{
+    (void)btn;
+    hint_dismiss(data);
+}
+
+static gboolean callout_show(gpointer data)
+{
+    F87KeyboardView *self = data;
+    self->ind_callout_timer = 0;
+    if (self->ind_hint && self->ind_callout && gtk_widget_get_mapped(GTK_WIDGET(self))) {
+        GdkRectangle rect = indicator_rect(self);
+        gtk_popover_set_pointing_to(GTK_POPOVER(self->ind_callout), &rect);
+        gtk_popover_popup(GTK_POPOVER(self->ind_callout));
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static GtkWidget *callout_new(F87KeyboardView *self)
+{
+    GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10));
+    gtk_widget_set_margin_start(GTK_WIDGET(box), 6);
+    gtk_widget_set_margin_end(GTK_WIDGET(box), 4);
+    gtk_widget_set_margin_top(GTK_WIDGET(box), 4);
+    gtk_widget_set_margin_bottom(GTK_WIDGET(box), 4);
+
+    GtkWidget *icon = gtk_image_new_from_icon_name("starred-symbolic");
+    gtk_widget_add_css_class(icon, "accent");
+    gtk_box_append(box, icon);
+
+    GtkLabel *label = GTK_LABEL(gtk_label_new(NULL));
+    char *markup = g_markup_printf_escaped("<b>%s</b> %s", _("New:"),
+        _("click the LED to change its mode, colour and speed"));
+    gtk_label_set_markup(label, markup);
+    g_free(markup);
+    gtk_label_set_wrap(label, TRUE);
+    gtk_label_set_max_width_chars(label, 30);
+    gtk_label_set_xalign(label, 0);
+    gtk_box_append(box, GTK_WIDGET(label));
+
+    GtkWidget *btn = gtk_button_new_with_label(_("Got it"));
+    gtk_widget_add_css_class(btn, "suggested-action");
+    gtk_widget_add_css_class(btn, "pill");
+    gtk_widget_set_valign(btn, GTK_ALIGN_CENTER);
+    g_signal_connect(btn, "clicked", G_CALLBACK(on_callout_got_it), self);
+    gtk_box_append(box, btn);
+
+    GtkWidget *pop = gtk_popover_new();
+    gtk_popover_set_child(GTK_POPOVER(pop), GTK_WIDGET(box));
+    gtk_popover_set_autohide(GTK_POPOVER(pop), FALSE);  /* stays until dismissed */
+    gtk_popover_set_position(GTK_POPOVER(pop), GTK_POS_RIGHT);
+    gtk_widget_set_parent(pop, GTK_WIDGET(self));
+    return pop;
+}
+
+static void on_view_map(GtkWidget *widget, gpointer data)
+{
+    (void)data;
+    F87KeyboardView *self = F87_KEYBOARD_VIEW(widget);
+    /* Give the window a moment to settle before pointing at the LED */
+    if (self->ind_hint && !self->ind_callout_timer)
+        self->ind_callout_timer = g_timeout_add(600, callout_show, self);
+}
+
+static gboolean hint_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data)
+{
+    (void)data;
+    F87KeyboardView *self = F87_KEYBOARD_VIEW(widget);
+    self->ind_hint_phase = fmod(gdk_frame_clock_get_frame_time(clock) / 1.6e6, 1.0);
+    gtk_widget_queue_draw(widget);
+    return G_SOURCE_CONTINUE;
+}
+
+static gboolean on_query_tooltip(GtkWidget *widget, int x, int y,
+                                 gboolean keyboard_mode, GtkTooltip *tooltip,
+                                 gpointer data)
+{
+    (void)keyboard_mode; (void)data;
+    F87KeyboardView *self = F87_KEYBOARD_VIEW(widget);
+    if (!self->ind_popover ||
+        !indicator_hit(x, y, gtk_widget_get_width(widget), gtk_widget_get_height(widget)))
+        return FALSE;
+    gtk_tooltip_set_text(tooltip, _("ESC indicator LED — click to change"));
+    return TRUE;
+}
+
+static void restore_cursor(F87KeyboardView *self)
+{
+    if (self->paint_mode)
+        gtk_widget_set_cursor_from_name(GTK_WIDGET(self), "cell");
+    else if (self->click_mode)
+        gtk_widget_set_cursor_from_name(GTK_WIDGET(self), "crosshair");
+    else
+        gtk_widget_set_cursor(GTK_WIDGET(self), NULL);
+}
+
+static void set_indicator_hover(F87KeyboardView *self, gboolean hover)
+{
+    if (hover == self->ind_hover) return;
+    self->ind_hover = hover;
+    if (hover)
+        gtk_widget_set_cursor_from_name(GTK_WIDGET(self), "pointer");
+    else
+        restore_cursor(self);
+    gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void on_motion_leave(GtkEventControllerMotion *motion, gpointer data)
+{
+    (void)motion;
+    set_indicator_hover(data, FALSE);
+}
+
 static void on_paint_motion(GtkEventControllerMotion *motion,
                              double x, double y, gpointer data)
 {
     (void)motion;
     F87KeyboardView *self = data;
+
+    if (self->ind_popover)
+        set_indicator_hover(self, indicator_hit(x, y,
+                            gtk_widget_get_width(GTK_WIDGET(self)),
+                            gtk_widget_get_height(GTK_WIDGET(self))));
+
     if (!self->paint_mode || !self->paint_dragging) return;
 
     int w = gtk_widget_get_width(GTK_WIDGET(self));
@@ -361,12 +598,46 @@ static void f87_keyboard_view_init(F87KeyboardView *self)
     /* Motion handler for drag-to-paint */
     GtkEventController *motion = gtk_event_controller_motion_new();
     g_signal_connect(motion, "motion", G_CALLBACK(on_paint_motion), self);
+    g_signal_connect(motion, "leave", G_CALLBACK(on_motion_leave), self);
     gtk_widget_add_controller(GTK_WIDGET(self), motion);
+
+    gtk_widget_set_has_tooltip(GTK_WIDGET(self), TRUE);
+    g_signal_connect(self, "query-tooltip", G_CALLBACK(on_query_tooltip), NULL);
+    g_signal_connect(self, "map", G_CALLBACK(on_view_map), NULL);
+}
+
+/* A popover parented to this widget must be presented on every allocation */
+static void f87_keyboard_view_size_allocate(GtkWidget *widget, int width,
+                                             int height, int baseline)
+{
+    GTK_WIDGET_CLASS(f87_keyboard_view_parent_class)->size_allocate(
+        widget, width, height, baseline);
+    F87KeyboardView *self = F87_KEYBOARD_VIEW(widget);
+    if (self->ind_popover)
+        gtk_popover_present(GTK_POPOVER(self->ind_popover));
+    if (self->ind_callout) {
+        GdkRectangle rect = indicator_rect(self);
+        gtk_popover_set_pointing_to(GTK_POPOVER(self->ind_callout), &rect);
+        gtk_popover_present(GTK_POPOVER(self->ind_callout));
+    }
+}
+
+static void f87_keyboard_view_dispose(GObject *obj)
+{
+    F87KeyboardView *self = F87_KEYBOARD_VIEW(obj);
+    g_clear_pointer(&self->ind_popover, gtk_widget_unparent);
+    g_clear_pointer(&self->ind_callout, gtk_widget_unparent);
+    if (self->ind_callout_timer) {
+        g_source_remove(self->ind_callout_timer);
+        self->ind_callout_timer = 0;
+    }
+    G_OBJECT_CLASS(f87_keyboard_view_parent_class)->dispose(obj);
 }
 
 static void f87_keyboard_view_class_init(F87KeyboardViewClass *klass)
 {
-    (void)klass;
+    G_OBJECT_CLASS(klass)->dispose = f87_keyboard_view_dispose;
+    GTK_WIDGET_CLASS(klass)->size_allocate = f87_keyboard_view_size_allocate;
 }
 
 F87KeyboardView *f87_keyboard_view_new(void)
@@ -456,4 +727,55 @@ void f87_keyboard_view_set_click_mode(F87KeyboardView *view, gboolean enabled,
         gtk_widget_set_cursor_from_name(GTK_WIDGET(view), "crosshair");
     else if (!view->paint_mode)
         gtk_widget_set_cursor(GTK_WIDGET(view), NULL);
+}
+
+void f87_keyboard_view_set_indicator(F87KeyboardView *view,
+                                      f87_indicator_style_t style,
+                                      uint8_t r, uint8_t g, uint8_t b)
+{
+    view->ind_style = style;
+    view->ind_color[0] = r;
+    view->ind_color[1] = g;
+    view->ind_color[2] = b;
+    gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
+void f87_keyboard_view_set_indicator_hint(F87KeyboardView *view, gboolean hint,
+                                           F87IndicatorOpenCallback on_dismiss,
+                                           gpointer user_data)
+{
+    view->ind_hint = hint;
+    view->ind_dismiss_cb = on_dismiss;
+    view->ind_dismiss_data = user_data;
+
+    if (hint && !view->ind_callout)
+        view->ind_callout = callout_new(view);
+    else if (!hint && view->ind_callout) {
+        gtk_popover_popdown(GTK_POPOVER(view->ind_callout));
+        g_clear_pointer(&view->ind_callout, gtk_widget_unparent);
+    }
+    if (hint && gtk_widget_get_mapped(GTK_WIDGET(view)) && !view->ind_callout_timer)
+        view->ind_callout_timer = g_timeout_add(600, callout_show, view);
+
+    if (hint && !view->ind_hint_tick)
+        view->ind_hint_tick = gtk_widget_add_tick_callback(GTK_WIDGET(view),
+                                                           hint_tick, NULL, NULL);
+    else if (!hint && view->ind_hint_tick) {
+        gtk_widget_remove_tick_callback(GTK_WIDGET(view), view->ind_hint_tick);
+        view->ind_hint_tick = 0;
+    }
+    gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
+void f87_keyboard_view_set_indicator_popover(F87KeyboardView *view,
+                                              GtkWidget *popover,
+                                              F87IndicatorOpenCallback on_open,
+                                              gpointer user_data)
+{
+    g_clear_pointer(&view->ind_popover, gtk_widget_unparent);
+    view->ind_popover = popover;
+    view->ind_open_cb = on_open;
+    view->ind_open_data = user_data;
+    if (popover)
+        gtk_widget_set_parent(popover, GTK_WIDGET(view));
 }

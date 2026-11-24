@@ -54,7 +54,12 @@ static void usage(const char *progname)
         "  profile delete <name>            Delete a profile\n"
         "  profile list                     List saved profiles\n"
         "  sidelight <0-4>                  Set side light mode\n"
-        "  batterylight <0-4>               Set battery light mode\n"
+        "  batterylight <1-4|off>           ESC indicator LED mode: 1=rainbow,\n"
+        "                                   2=breathing (colour cycle),\n"
+        "                                   3=static, 4=breathing (one colour)\n"
+        "  batterylight color <colour>      red, green, blue, yellow, pink,\n"
+        "                                   lightblue, white (or 0-6)\n"
+        "  batterylight speed <0-4>         ESC indicator LED speed (0=slow)\n"
         "  battery                          Show battery level (wireless)\n"
         "\n"
         "Options:\n"
@@ -1037,9 +1042,44 @@ static int dispatch_client(f87_client *client, const char *cmd,
         return 0;
 
     } else if (strcmp(cmd, "batterylight") == 0) {
-        if (argc < 1) { fprintf(stderr, "Usage: f87ctl batterylight <0-4>\n"); return 1; }
+        if (argc < 1) { fprintf(stderr, "Usage: f87ctl batterylight <1-4|off|color C|speed N>\n"); return 1; }
+        if (strcmp(argv[0], "speed") == 0) {
+            if (argc < 2) { fprintf(stderr, "Usage: f87ctl batterylight speed <0-4>\n"); return 1; }
+            int sp = atoi(argv[1]);
+            if (sp < 0 || sp > F87_BATTERY_SPEED_MAX) { fprintf(stderr, "Speed must be 0-4.\n"); return 1; }
+            if (f87_client_set_battery_light_speed(client, (uint8_t)sp) < 0) {
+                fprintf(stderr, "Failed to set battery light speed.\n"); return 1;
+            }
+            printf("Battery light speed set to %d.\n", sp);
+            return 0;
+        }
+        if (strcmp(argv[0], "color") == 0 || strcmp(argv[0], "colour") == 0) {
+            static const char *names[] = {"red", "green", "blue", "yellow",
+                                          "pink", "lightblue", "white"};
+            if (argc < 2) { fprintf(stderr, "Usage: f87ctl batterylight color <name|0-6>\n"); return 1; }
+            int c = -1;
+            for (int i = 0; i < 7; i++)
+                if (strcmp(argv[1], names[i]) == 0) c = i;
+            if (c < 0 && argv[1][0] >= '0' && argv[1][0] <= '6' && argv[1][1] == '\0')
+                c = argv[1][0] - '0';
+            if (c < 0) { fprintf(stderr, "Unknown colour '%s'.\n", argv[1]); return 1; }
+            if (f87_client_set_battery_light_color(client, (uint8_t)c) < 0) {
+                fprintf(stderr, "Failed to set battery light colour.\n"); return 1;
+            }
+            printf("Battery light colour set to %s.\n", names[c]);
+            return 0;
+        }
+        if (strcmp(argv[0], "off") == 0) {
+            /* Static mode with colour index 7 = LED dark (mode 0 doesn't work) */
+            if (f87_client_set_battery_light(client, 3) < 0 ||
+                f87_client_set_battery_light_color(client, F87_BATTERY_COLOR_OFF) < 0) {
+                fprintf(stderr, "Failed to switch battery light off.\n"); return 1;
+            }
+            printf("Battery light off.\n");
+            return 0;
+        }
         int mode = atoi(argv[0]);
-        if (mode < 0 || mode > 4) { fprintf(stderr, "Mode must be 0-4.\n"); return 1; }
+        if (mode < 1 || mode > 4) { fprintf(stderr, "Mode must be 1-4 or 'off'.\n"); return 1; }
         if (f87_client_set_battery_light(client, (uint8_t)mode) < 0) {
             fprintf(stderr, "Failed to set battery light.\n"); return 1;
         }

@@ -39,4 +39,29 @@ typedef void (*F87KeyClickCallback)(int key_id, gpointer user_data);
 void f87_keyboard_view_set_click_mode(F87KeyboardView *view, gboolean enabled,
                                        F87KeyClickCallback cb, gpointer user_data);
 
+/* Indicator LED between ESC and F1 (the "battery light") */
+typedef enum {
+    F87_INDICATOR_OFF,
+    F87_INDICATOR_SOLID,    /* r, g, b */
+    F87_INDICATOR_RAINBOW,  /* rainbow / colour-cycle modes */
+} f87_indicator_style_t;
+
+void f87_keyboard_view_set_indicator(F87KeyboardView *view,
+                                      f87_indicator_style_t style,
+                                      uint8_t r, uint8_t g, uint8_t b);
+
+/* Popover shown when the indicator LED is clicked. The view becomes its
+ * parent. on_open runs just before it pops up (e.g. to refresh its state). */
+typedef void (*F87IndicatorOpenCallback)(gpointer user_data);
+
+/* New-user hint: pulse the LED and show a callout bubble pointing at it.
+ * on_dismiss runs once when the user clicks "Got it" or opens the LED menu. */
+void f87_keyboard_view_set_indicator_hint(F87KeyboardView *view, gboolean hint,
+                                           F87IndicatorOpenCallback on_dismiss,
+                                           gpointer user_data);
+void f87_keyboard_view_set_indicator_popover(F87KeyboardView *view,
+                                              GtkWidget *popover,
+                                              F87IndicatorOpenCallback on_open,
+                                              gpointer user_data);
+
 #endif /* F87_KEYBOARD_VIEW_H */

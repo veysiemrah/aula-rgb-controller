@@ -74,6 +74,8 @@
 #define F87_CFG_EFFECT_ID     18    /* keyboard effect_id byte */
 #define F87_CFG_SIDE_LIGHT    26    /* side light effect (0=off,1=rainbow,2=breath_color,3=static,4=breath_red) */
 #define F87_CFG_BATTERY_LIGHT 36    /* battery light effect (same values as side) */
+#define F87_CFG_BATTERY_COLOR 37    /* battery light colour index, see F87_BATTERY_COLOR_* */
+#define F87_CFG_BATTERY_SPEED 39    /* battery light animation speed, 0 (slow) - 4 (fast) */
 #define F87_CFG_TERMINATOR    134   /* 0x5A 0xA5 */
 
 /*

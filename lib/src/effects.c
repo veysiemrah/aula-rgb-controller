@@ -125,19 +125,14 @@ int f87_set_side_light(f87_device *dev, f87_side_mode mode)
     return f87_config_write(dev, eid, brightness, 0xFF, 0xFF);
 }
 
-/*
- * Set battery light effect (config byte 36).
- */
-int f87_set_battery_light(f87_device *dev, f87_side_mode mode)
+/* Read-modify-write one battery light config byte, keeping the key effect */
+static int battery_cfg_write(f87_device *dev, int offset, uint8_t value)
 {
-    if (!dev)
-        return -1;
-
     int rc = f87_config_read(dev);
     if (rc < 0)
         return rc;
 
-    dev->config[F87_CFG_BATTERY_LIGHT] = (uint8_t)mode;
+    dev->config[offset] = value;
 
     uint8_t eid = dev->config[F87_CFG_EFFECT_ID];
     uint8_t brightness = F87_BRIGHTNESS_MAX;
@@ -145,6 +140,61 @@ int f87_set_battery_light(f87_device *dev, f87_side_mode mode)
         brightness = dev->config[F87_CFG_EFFECT_PARAM(eid)];
 
     return f87_config_write(dev, eid, brightness, 0xFF, 0xFF);
+}
+
+static int battery_cfg_read(f87_device *dev, int offset)
+{
+    int rc = f87_config_read(dev);
+    if (rc < 0)
+        return rc;
+    return dev->config[offset];
+}
+
+/*
+ * Set battery light effect (config byte 36) — the indicator LED next to ESC.
+ * Mode 0 does not switch it off on the F87 TK; use colour
+ * F87_BATTERY_COLOR_OFF instead.
+ */
+int f87_set_battery_light(f87_device *dev, f87_side_mode mode)
+{
+    if (!dev)
+        return -1;
+    return battery_cfg_write(dev, F87_CFG_BATTERY_LIGHT, (uint8_t)mode);
+}
+
+int f87_get_battery_light(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+    return battery_cfg_read(dev, F87_CFG_BATTERY_LIGHT);
+}
+
+int f87_set_battery_light_speed(f87_device *dev, uint8_t speed)
+{
+    if (!dev || speed > F87_BATTERY_SPEED_MAX)
+        return -1;
+    return battery_cfg_write(dev, F87_CFG_BATTERY_SPEED, speed);
+}
+
+int f87_get_battery_light_speed(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+    return battery_cfg_read(dev, F87_CFG_BATTERY_SPEED);
+}
+
+int f87_set_battery_light_color(f87_device *dev, uint8_t color)
+{
+    if (!dev || color > F87_BATTERY_COLOR_MAX)
+        return -1;
+    return battery_cfg_write(dev, F87_CFG_BATTERY_COLOR, color);
+}
+
+int f87_get_battery_light_color(f87_device *dev)
+{
+    if (!dev)
+        return -1;
+    return battery_cfg_read(dev, F87_CFG_BATTERY_COLOR);
 }
 
 const char *f87_mode_name(f87_mode mode)
