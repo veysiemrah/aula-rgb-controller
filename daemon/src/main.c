@@ -112,8 +112,6 @@ int main(int argc, char **argv)
             }
             if (last_profile.side_light > 0)
                 f87d_effmgr_set_side_light(&g_effmgr, dev, last_profile.side_light);
-            if (last_profile.battery_light > 0)
-                f87d_effmgr_set_battery_light(&g_effmgr, dev, last_profile.battery_light);
         }
     }
 

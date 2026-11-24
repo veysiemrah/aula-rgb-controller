@@ -71,6 +71,34 @@ typedef struct {
 int f87_set_side_light(f87_device *dev, f87_side_mode mode);
 int f87_set_battery_light(f87_device *dev, f87_side_mode mode);
 
+/* Current battery light mode (0-4), or < 0 on error.
+ *
+ * Note (F87 TK): after the keyboard restarts (USB re-enumeration) the firmware
+ * runs its own fast rainbow on this LED and ignores these settings until the
+ * next factory reset (Fn+Esc held ~5 s). No config value selects that rainbow. */
+int f87_get_battery_light(f87_device *dev);
+
+/* Battery light animation speed: 0 (slow) .. 4 (fast) */
+#define F87_BATTERY_SPEED_MAX 4
+int f87_set_battery_light_speed(f87_device *dev, uint8_t speed);
+int f87_get_battery_light_speed(f87_device *dev);
+
+/* Battery light colour (used by the static and breathing modes).
+ * Index 7 switches the LED off. Found by testing on an F87 TK. */
+enum {
+    F87_BATTERY_COLOR_RED = 0,
+    F87_BATTERY_COLOR_GREEN,
+    F87_BATTERY_COLOR_BLUE,
+    F87_BATTERY_COLOR_YELLOW,
+    F87_BATTERY_COLOR_PINK,
+    F87_BATTERY_COLOR_LIGHT_BLUE,
+    F87_BATTERY_COLOR_WHITE,
+    F87_BATTERY_COLOR_OFF,
+};
+#define F87_BATTERY_COLOR_MAX F87_BATTERY_COLOR_OFF
+int f87_set_battery_light_color(f87_device *dev, uint8_t color);
+int f87_get_battery_light_color(f87_device *dev);
+
 int f87_set_effect(f87_device *dev, const f87_effect *effect);
 int f87_get_current_effect(f87_device *dev, f87_effect *effect);
 

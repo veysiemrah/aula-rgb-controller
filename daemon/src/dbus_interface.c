@@ -441,6 +441,48 @@ static int method_set_battery_light(sd_bus_message *msg, void *userdata,
     return sd_bus_reply_method_return(msg, "b", 1);
 }
 
+typedef int (*battery_setter_fn)(f87d_effect_manager_t *, f87_device *, uint8_t);
+
+static int set_battery_byte(sd_bus_message *msg, f87d_dbus_ctx_t *ctx,
+                            sd_bus_error *error, uint8_t max,
+                            battery_setter_fn setter)
+{
+    f87d_idle_touch(ctx->idle);
+    uint8_t value;
+
+    int rc = sd_bus_message_read(msg, "y", &value);
+    if (rc < 0) return sd_bus_error_set_errno(error, -rc);
+    if (value > max)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.InvalidArgument", "Value must be 0-%d", max);
+
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (!dev)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.NotConnected", "No keyboard connected");
+
+    rc = setter(ctx->effmgr, dev, value);
+    if (rc < 0)
+        return sd_bus_reply_method_errorf(msg,
+            "org.f87.Error.USBError", "Failed: %d", rc);
+
+    return sd_bus_reply_method_return(msg, "b", 1);
+}
+
+static int method_set_battery_light_speed(sd_bus_message *msg, void *userdata,
+                                           sd_bus_error *error)
+{
+    return set_battery_byte(msg, userdata, error, F87_BATTERY_SPEED_MAX,
+                            f87d_effmgr_set_battery_light_speed);
+}
+
+static int method_set_battery_light_color(sd_bus_message *msg, void *userdata,
+                                           sd_bus_error *error)
+{
+    return set_battery_byte(msg, userdata, error, F87_BATTERY_COLOR_MAX,
+                            f87d_effmgr_set_battery_light_color);
+}
+
 /* ---- Profile methods ---- */
 
 static int method_save_profile(sd_bus_message *msg, void *userdata,
@@ -676,7 +718,55 @@ static int prop_get_battery_light(sd_bus *bus, const char *path,
 {
     (void)bus; (void)path; (void)iface; (void)property; (void)error;
     f87d_dbus_ctx_t *ctx = userdata;
+
+    /* Ask the keyboard: the setting lives in its flash and can change behind
+     * our back (factory reset). Skip while an animation streams frames so we
+     * don't interleave a config read with them. */
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (dev && !f87d_effmgr_has_sw_running(ctx->effmgr)) {
+        int bl = f87_get_battery_light(dev);
+        if (bl >= 0)
+            ctx->effmgr->battery_light = (uint8_t)bl;
+    }
     return sd_bus_message_append(reply, "y", ctx->effmgr->battery_light);
+}
+
+/* Battery light speed/colour live in keyboard flash — read them live, but not
+ * while an animation streams frames (see prop_get_battery_light). */
+static uint8_t battery_byte_live(f87d_dbus_ctx_t *ctx,
+                                 int (*getter)(f87_device *), uint8_t *cache)
+{
+    f87_device *dev = f87d_devmgr_get_device(ctx->devmgr);
+    if (dev && !f87d_effmgr_has_sw_running(ctx->effmgr)) {
+        int v = getter(dev);
+        if (v >= 0)
+            *cache = (uint8_t)v;
+    }
+    return *cache;
+}
+
+static int prop_get_battery_light_speed(sd_bus *bus, const char *path,
+                                         const char *iface, const char *property,
+                                         sd_bus_message *reply, void *userdata,
+                                         sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    return sd_bus_message_append(reply, "y",
+        battery_byte_live(ctx, f87_get_battery_light_speed,
+                          &ctx->effmgr->battery_light_speed));
+}
+
+static int prop_get_battery_light_color(sd_bus *bus, const char *path,
+                                         const char *iface, const char *property,
+                                         sd_bus_message *reply, void *userdata,
+                                         sd_bus_error *error)
+{
+    (void)bus; (void)path; (void)iface; (void)property; (void)error;
+    f87d_dbus_ctx_t *ctx = userdata;
+    return sd_bus_message_append(reply, "y",
+        battery_byte_live(ctx, f87_get_battery_light_color,
+                          &ctx->effmgr->battery_light_color));
 }
 
 static int prop_get_is_wireless(sd_bus *bus, const char *path,
@@ -731,6 +821,10 @@ static const sd_bus_vtable f87_vtable[] = {
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetBatteryLight", "y", "b", method_set_battery_light,
                   SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetBatteryLightSpeed", "y", "b", method_set_battery_light_speed,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetBatteryLightColor", "y", "b", method_set_battery_light_color,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SaveProfile", "s", "b", method_save_profile,
                   SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("LoadProfile", "s", "b", method_load_profile,
@@ -767,6 +861,10 @@ static const sd_bus_vtable f87_vtable[] = {
     SD_BUS_PROPERTY("SideLight", "y", prop_get_side_light, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
     SD_BUS_PROPERTY("BatteryLight", "y", prop_get_battery_light, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("BatteryLightSpeed", "y", prop_get_battery_light_speed, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("BatteryLightColor", "y", prop_get_battery_light_color, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
     SD_BUS_PROPERTY("IsWireless", "b", prop_get_is_wireless, 0,
                     SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),

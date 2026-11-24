@@ -50,6 +50,14 @@ int f87_client_set_per_key_colors(f87_client *client,
 /* Side/battery light */
 int f87_client_set_side_light(f87_client *client, uint8_t mode);
 int f87_client_set_battery_light(f87_client *client, uint8_t mode);
+/* Returns 0-4, or -1 on error */
+int f87_client_get_battery_light(f87_client *client);
+/* Battery light animation speed 0 (slow) - 4 (fast); getter returns -1 on error */
+int f87_client_set_battery_light_speed(f87_client *client, uint8_t speed);
+int f87_client_get_battery_light_speed(f87_client *client);
+/* Battery light colour 0-7 (F87_BATTERY_COLOR_*, 7 = off); getter -1 on error */
+int f87_client_set_battery_light_color(f87_client *client, uint8_t color);
+int f87_client_get_battery_light_color(f87_client *client);
 
 /* Profiles */
 int f87_client_save_profile(f87_client *client, const char *name);

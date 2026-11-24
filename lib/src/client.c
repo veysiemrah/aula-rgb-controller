@@ -285,6 +285,42 @@ int f87_client_set_battery_light(f87_client *client, uint8_t mode)
     return call_bool(client, "SetBatteryLight", "y", mode);
 }
 
+static int get_byte_property(f87_client *client, const char *name)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    uint8_t val = 0;
+
+    int r = sd_bus_get_property_trivial(client->bus, DBUS_DEST, DBUS_PATH,
+                                         DBUS_IFACE, name, &error, 'y', &val);
+    sd_bus_error_free(&error);
+    return r < 0 ? -1 : val;
+}
+
+int f87_client_set_battery_light_speed(f87_client *client, uint8_t speed)
+{
+    return call_bool(client, "SetBatteryLightSpeed", "y", speed);
+}
+
+int f87_client_get_battery_light_speed(f87_client *client)
+{
+    return get_byte_property(client, "BatteryLightSpeed");
+}
+
+int f87_client_get_battery_light(f87_client *client)
+{
+    return get_byte_property(client, "BatteryLight");
+}
+
+int f87_client_set_battery_light_color(f87_client *client, uint8_t color)
+{
+    return call_bool(client, "SetBatteryLightColor", "y", color);
+}
+
+int f87_client_get_battery_light_color(f87_client *client)
+{
+    return get_byte_property(client, "BatteryLightColor");
+}
+
 int f87_client_save_profile(f87_client *client, const char *name)
 {
     return call_bool(client, "SaveProfile", "s", name);

@@ -190,6 +190,26 @@ int f87d_effmgr_set_battery_light(f87d_effect_manager_t *mgr, f87_device *dev,
     return 0;
 }
 
+int f87d_effmgr_set_battery_light_speed(f87d_effect_manager_t *mgr,
+                                         f87_device *dev, uint8_t speed)
+{
+    if (!dev) return -1;
+    int rc = f87_set_battery_light_speed(dev, speed);
+    if (rc < 0) return rc;
+    mgr->battery_light_speed = speed;
+    return 0;
+}
+
+int f87d_effmgr_set_battery_light_color(f87d_effect_manager_t *mgr,
+                                         f87_device *dev, uint8_t color)
+{
+    if (!dev) return -1;
+    int rc = f87_set_battery_light_color(dev, color);
+    if (rc < 0) return rc;
+    mgr->battery_light_color = color;
+    return 0;
+}
+
 int f87d_effmgr_stop(f87d_effect_manager_t *mgr)
 {
     stop_anim(mgr);
