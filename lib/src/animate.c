@@ -28,59 +28,82 @@ uint32_t f87_effect_rand(uint32_t *seed)
     return (*seed >> 16) & 0x7FFF;
 }
 
-/* Find keyboard input device for reactive effects.
- * Prefers "BY Tech Gaming Keyboard" (AULA), falls back to any keyboard with KEY_A. */
-static int find_keyboard_input(void)
+/* True if the event device reports key presses (has KEY_A). */
+static int has_letter_keys(int fd)
+{
+    unsigned long evbits = 0;
+    if (ioctl(fd, EVIOCGBIT(0, sizeof(evbits)), &evbits) < 0 ||
+        !(evbits & (1UL << EV_KEY)))
+        return 0;
+
+    unsigned long keybits[(KEY_MAX + 8 * sizeof(unsigned long) - 1) /
+                          (8 * sizeof(unsigned long))] = {0};
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybits)), keybits) < 0)
+        return 0;
+
+    return (keybits[KEY_A / (8 * sizeof(unsigned long))] >>
+            (KEY_A % (8 * sizeof(unsigned long)))) & 1UL;
+}
+
+/* True if the event device belongs to the AULA keyboard. */
+static int is_aula_keyboard(int fd)
+{
+    struct input_id id;
+    if (ioctl(fd, EVIOCGID, &id) == 0 &&
+        ((id.vendor == 0x258A && id.product == 0x010C) ||
+         (id.vendor == 0x3554 && id.product == 0xFA09)))
+        return 1;
+
+    char name[256] = "";
+    ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+    return strstr(name, "BY Tech Gaming Keyboard") != NULL;
+}
+
+/*
+ * Open the keyboard input devices for reactive effects.
+ *
+ * The AULA keyboard reports key presses on more than one event device:
+ * the boot keyboard on USB interface 0 and an NKRO keyboard collection on
+ * interface 1 (both named "BY Tech Gaming Keyboard"). Which one carries
+ * the presses depends on the keyboard mode, so listen on all of them.
+ * Falls back to the first other keyboard if no AULA device is found.
+ */
+static void open_keyboard_inputs(f87_anim_ctx_t *ctx)
 {
     char path[64];
-    char name[256];
     int fallback_fd = -1;
 
-    for (int i = 0; i < 32; i++) {
+    ctx->num_inputs = 0;
+    for (int i = 0; i < 64 && ctx->num_inputs < F87_MAX_INPUTS; i++) {
         snprintf(path, sizeof(path), "/dev/input/event%d", i);
-        int fd = open(path, O_RDONLY | O_NONBLOCK);
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) continue;
 
-        /* Check if it has KEY_A capability */
-        unsigned long evbits = 0;
-        if (ioctl(fd, EVIOCGBIT(0, sizeof(evbits)), &evbits) < 0 ||
-            !(evbits & (1UL << EV_KEY))) {
+        if (!has_letter_keys(fd)) {
             close(fd);
-            continue;
-        }
-
-        unsigned long keybits[(KEY_MAX + 8 * sizeof(unsigned long) - 1) /
-                              (8 * sizeof(unsigned long))] = {0};
-        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybits)), keybits) < 0) {
-            close(fd);
-            continue;
-        }
-
-        if (!(keybits[KEY_A / (8 * sizeof(unsigned long))] &
-              (1UL << (KEY_A % (8 * sizeof(unsigned long)))))) {
-            close(fd);
-            continue;
-        }
-
-        /* Get device name — prefer AULA/BY Tech keyboard */
-        name[0] = '\0';
-        ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-
-        if (strstr(name, "BY Tech Gaming Keyboard") && !strstr(name, "Consumer") &&
-            !strstr(name, "System") && !strstr(name, "Mouse")) {
-            /* Found the exact AULA keyboard input */
-            if (fallback_fd >= 0) close(fallback_fd);
-            return fd;
-        }
-
-        /* Keep first keyboard as fallback */
-        if (fallback_fd < 0)
+        } else if (is_aula_keyboard(fd)) {
+            ctx->input_fds[ctx->num_inputs++] = fd;
+        } else if (fallback_fd < 0) {
             fallback_fd = fd;
-        else
+        } else {
             close(fd);
+        }
     }
 
-    return fallback_fd;
+    if (ctx->num_inputs == 0 && fallback_fd >= 0)
+        ctx->input_fds[ctx->num_inputs++] = fallback_fd;
+    else if (fallback_fd >= 0)
+        close(fallback_fd);
+
+    F87_INFO(F87_SRC_EFFECT, "Reactive input: %d keyboard device(s)",
+             ctx->num_inputs);
+}
+
+static void close_keyboard_inputs(f87_anim_ctx_t *ctx)
+{
+    for (int i = 0; i < ctx->num_inputs; i++)
+        close(ctx->input_fds[i]);
+    ctx->num_inputs = 0;
 }
 
 /* Map Linux keycode to F87 key_id (-1 if not found).
@@ -148,22 +171,20 @@ static void *anim_thread_func(void *arg)
             audio_ptr = &audio;
 
         /* Poll input for reactive effects */
-        if (ctx->input_fd >= 0) {
-            struct pollfd pfd = { .fd = ctx->input_fd, .events = POLLIN };
+        for (int n = 0; n < ctx->num_inputs; n++) {
+            struct pollfd pfd = { .fd = ctx->input_fds[n], .events = POLLIN };
             while (poll(&pfd, 1, 0) > 0) {
                 struct input_event ev;
-                if (read(ctx->input_fd, &ev, sizeof(ev)) == (ssize_t)sizeof(ev)) {
-                    if (ev.type == EV_KEY && ev.value == 1) {
-                        pthread_mutex_lock(&ctx->effect_mutex);
-                        if (ctx->active_effect && ctx->active_effect->on_key) {
-                            int key_id = keycode_to_key_id(ev.code);
-                            if (key_id >= 0)
-                                ctx->active_effect->on_key(&ctx->effect_ctx, key_id);
-                        }
-                        pthread_mutex_unlock(&ctx->effect_mutex);
-                    }
-                } else {
+                if (read(pfd.fd, &ev, sizeof(ev)) != (ssize_t)sizeof(ev))
                     break;
+                if (ev.type == EV_KEY && ev.value == 1) {
+                    pthread_mutex_lock(&ctx->effect_mutex);
+                    if (ctx->active_effect && ctx->active_effect->on_key) {
+                        int key_id = keycode_to_key_id(ev.code);
+                        if (key_id >= 0)
+                            ctx->active_effect->on_key(&ctx->effect_ctx, key_id);
+                    }
+                    pthread_mutex_unlock(&ctx->effect_mutex);
                 }
             }
         }
@@ -246,7 +267,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
     if (!ctx) return NULL;
 
     ctx->dev = dev;
-    ctx->input_fd = -1;
+    ctx->num_inputs = 0;
     pthread_mutex_init(&ctx->effect_mutex, NULL);
 
     /* Apply config with defaults */
@@ -289,10 +310,8 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
     }
 
     /* Open input device if needed */
-    if (effect->needs_input) {
-        ctx->input_fd = find_keyboard_input();
-        /* Non-fatal if input not available */
-    }
+    if (effect->needs_input)
+        open_keyboard_inputs(ctx);  /* Non-fatal if input not available */
 
     /* Set frame rate: override from config, or auto (25fps SW, 30fps music) */
     if (ctx->config.fps > 0) {
@@ -311,7 +330,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
         ctx->audio_ring = calloc(1, sizeof(f87_audio_ring_t));
         if (!ctx->audio_ring) {
             if (effect->destroy) effect->destroy(&ctx->effect_ctx);
-            if (ctx->input_fd >= 0) close(ctx->input_fd);
+            close_keyboard_inputs(ctx);
             pthread_mutex_destroy(&ctx->effect_mutex);
             free(ctx);
             return NULL;
@@ -324,7 +343,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
             F87_ERROR(F87_SRC_AUDIO, "anim_start: audio thread failed");
             free(ctx->audio_ring);
             if (effect->destroy) effect->destroy(&ctx->effect_ctx);
-            if (ctx->input_fd >= 0) close(ctx->input_fd);
+            close_keyboard_inputs(ctx);
             pthread_mutex_destroy(&ctx->effect_mutex);
             free(ctx);
             return NULL;
@@ -333,7 +352,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
 #else
     if (effect->needs_audio) {
         if (effect->destroy) effect->destroy(&ctx->effect_ctx);
-        if (ctx->input_fd >= 0) close(ctx->input_fd);
+        close_keyboard_inputs(ctx);
         pthread_mutex_destroy(&ctx->effect_mutex);
         free(ctx);
         return NULL;
@@ -351,7 +370,7 @@ f87_anim_ctx_t *f87_anim_start(f87_device *dev, f87_sw_effect_id effect_id,
             free(ctx->audio_ring);
         }
 #endif
-        if (ctx->input_fd >= 0) close(ctx->input_fd);
+        close_keyboard_inputs(ctx);
         pthread_mutex_destroy(&ctx->effect_mutex);
         free(ctx);
         return NULL;
@@ -380,8 +399,7 @@ int f87_anim_stop(f87_anim_ctx_t *ctx)
         ctx->active_effect->destroy(&ctx->effect_ctx);
     pthread_mutex_unlock(&ctx->effect_mutex);
 
-    if (ctx->input_fd >= 0)
-        close(ctx->input_fd);
+    close_keyboard_inputs(ctx);
 
     pthread_mutex_destroy(&ctx->effect_mutex);
 
@@ -407,14 +425,12 @@ int f87_anim_set_effect(f87_anim_ctx_t *ctx, f87_sw_effect_id effect_id)
     ctx->effect_ctx.effect_data = NULL;
 
     /* Open input device if new effect needs it and not yet open */
-    if (new_effect->needs_input && ctx->input_fd < 0)
-        ctx->input_fd = find_keyboard_input();
+    if (new_effect->needs_input && ctx->num_inputs == 0)
+        open_keyboard_inputs(ctx);
 
-    /* Close input device if new effect doesn't need it */
-    if (!new_effect->needs_input && ctx->input_fd >= 0) {
-        close(ctx->input_fd);
-        ctx->input_fd = -1;
-    }
+    /* Close input devices if new effect doesn't need them */
+    if (!new_effect->needs_input)
+        close_keyboard_inputs(ctx);
 
     ctx->active_effect = new_effect;
     if (new_effect->init) {

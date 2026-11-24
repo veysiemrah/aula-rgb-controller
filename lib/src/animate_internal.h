@@ -11,6 +11,9 @@
 #include "f87/audio_types.h"
 #include "f87/lighting.h"
 
+/* Max keyboard event devices a reactive effect listens on */
+#define F87_MAX_INPUTS 8
+
 /* Frame buffer: 88 keys x RGB */
 typedef struct {
     uint8_t keys[F87_KEY_COUNT][3];
@@ -66,8 +69,9 @@ struct f87_anim_ctx {
     /* Frame timing */
     uint64_t frame_time_us;  /* Target frame time in microseconds */
 
-    /* Input fd for reactive effects (-1 if not needed) */
-    int input_fd;
+    /* Keyboard event devices for reactive effects (none if not needed) */
+    int input_fds[F87_MAX_INPUTS];
+    int num_inputs;
 };
 
 /* Error codes */

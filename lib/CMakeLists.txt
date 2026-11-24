@@ -18,6 +18,7 @@ endif()
 add_library(f87 SHARED
     src/device.c
     src/protocol.c
+    src/hidraw.c
     src/lighting.c
     src/effects.c
     src/animate.c
