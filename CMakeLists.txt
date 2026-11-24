@@ -76,6 +76,14 @@ add_test(NAME error_history_tests COMMAND test_error_history)
 
 include(GNUInstallDirs)
 
+# Let the installed programs find libf87 even when the install prefix's
+# library dir isn't on the loader's search path (e.g. /usr/local/lib on
+# Arch). Skipped for system dirs like /usr/lib, where it isn't needed.
+list(FIND CMAKE_C_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_FULL_LIBDIR}" _f87_libdir_is_system)
+if(_f87_libdir_is_system EQUAL -1)
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_FULL_LIBDIR}")
+endif()
+
 option(BUILD_CLI "Build the f87ctl command-line tool" ON)
 option(BUILD_GUI "Build the f87control GTK4 GUI application" OFF)
 option(BUILD_DAEMON "Build the f87d D-Bus daemon" ON)
